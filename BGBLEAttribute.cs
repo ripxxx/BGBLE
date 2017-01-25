@@ -14,5 +14,8 @@ namespace BGBLE
     /// <summary>This class implements BLE attribute which using BG API.</summary>
     class BGBLEAttribute
     {
+
+        //PROPRTIES
+        //PROPRTIES
     }
 }
