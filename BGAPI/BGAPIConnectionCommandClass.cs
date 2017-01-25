@@ -8,12 +8,28 @@ using System.Linq;
 
 namespace BGBLE.BGAPI
 {
+    /// <summary>Connection Status Flags, multiple flags can be set at a time.</summary>
     public struct BGAPIBLEDeviceConnectionStatus
     {
-        public bool isConnected;
-        public bool isEncrypted;
+        /// <summary>Connection completed flag, which is used to tell a new connection has been created.</summary>
         public bool isCompleted;
+
+        /// <summary>This status flag tells the connection exists to a remote device.</summary>
+        public bool isConnected;
+
+        /// <summary>This flag tells the connection is encrypted.</summary>
+        public bool isEncrypted;
+
+        /// <summary>This flag tells that connection parameters have changed and. It is set when connection parameters have changed due to a link layer operation.</summary>
         public bool isParametersChanged;
+
+        public BGAPIBLEDeviceConnectionStatus(bool _isCompleted, bool _isConnected, bool _isEncrypted, bool _isParametersChanged)
+        {
+            isCompleted = _isCompleted;
+            isConnected = _isConnected;
+            isEncrypted = _isEncrypted;
+            isParametersChanged = _isParametersChanged;
+        }
     };
 
     public class BGAPIConnectionCommandClassDisconnectEventArgs : EventArgs

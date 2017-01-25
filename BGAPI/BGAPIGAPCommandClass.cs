@@ -11,9 +11,12 @@ using System.Text;
 namespace BGBLE.BGAPI
 {
     public enum BGAPIDiscoverMode : byte {
-        Limited = 0x00,     //Discover only limited discoverable devices, that is, Slaves which have the LE Limited Discoverable Mode bit set in the Flags AD type of their advertisement packets
-        Generic = 0x01,     //Discover limited and generic discoverable devices, that is, Slaves which have the LE Limited Discoverable Mode or the LE General Discoverable Mode bit set in the Flags AD type of their advertisement packets
-        Observation = 0x02  //Discover all devices regardless of the Flags AD type, so also devices in non-discoverable mode will be reported to host
+        /// <summary>Discover only limited discoverable devices, that is, Slaves which have the LE Limited Discoverable Mode bit set in the Flags AD type of their advertisement packets.</summary>
+        Limited = 0x00,
+        /// <summary>Discover limited and generic discoverable devices, that is, Slaves which have the LE Limited Discoverable Mode or the LE General Discoverable Mode bit set in the Flags AD type of their advertisement packets.</summary>
+        Generic = 0x01,
+        /// <summary>Discover all devices regardless of the Flags AD type, so also devices in non-discoverable mode will be reported to host.</summary>
+        Observation = 0x02
     }
     public enum BGAPIBluetoothAddressType : byte {
         Public = 0x00,      //Public Address

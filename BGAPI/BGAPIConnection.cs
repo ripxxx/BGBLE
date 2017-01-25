@@ -67,7 +67,7 @@ namespace BGBLE.BGAPI
     public delegate void BGAPIEventReceivedHandler(BGAPIConnectionEventData eventData);
 
     /// <summary>This class serves connection with BLED112 device. To get instance of the class call class method Connection().</summary>
-    class BGAPIConnection
+    public class BGAPIConnection
     {
         private Dictionary<byte, BGAPIEventReceivedHandler> _eventHandlers;
         private Dictionary<ushort, List<BGAPIConnectionEventData>> _eventsData;
@@ -97,7 +97,7 @@ namespace BGBLE.BGAPI
                 }
                 else
                 {
-                    throw new Exception("Bluegiga BLED112 port was not found.");
+                    throw new BGAPIException(0xFF01);
                 }
             }
             else {
@@ -124,6 +124,7 @@ namespace BGBLE.BGAPI
             }
         }
 
+        // EVENT HANDLERS
         /// <summary>Event handler for DataReceived event of SerialPort.</summary>
         /// <param name="sender">Instace of SerialPort class which generated the event</param>
         /// <param name="e">EventArgs</param>
@@ -140,6 +141,16 @@ namespace BGBLE.BGAPI
         {
             Console.WriteLine("!!!Serial Port Error!!!");
         }
+
+        /// <summary>Event handler for Elapsed event of System.Timers.Timer.</summary>
+        /// <param name="sender">Instace of System.Timers.Timer class which generated the event</param>
+        /// <param name="e">EventArgs</param>
+        private void TimeoutReached(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            _timer.Stop();
+            throw new BGAPIException(0xFF02, new TimeoutException());
+        }
+        // EVENT HANDLERS
 
         /// <summary>Parses data packet and extracts header information.</summary>
         /// <param name="data">Packet data</param>
@@ -252,15 +263,6 @@ namespace BGBLE.BGAPI
             } while (serialPort.BytesToRead > 0);
         }
 
-        /// <summary>Event handler for Elapsed event of System.Timers.Timer.</summary>
-        /// <param name="sender">Instace of System.Timers.Timer class which generated the event</param>
-        /// <param name="e">EventArgs</param>
-        private void TimeoutReached(object sender, System.Timers.ElapsedEventArgs e)
-        {
-            _timer.Stop();
-            throw new TimeoutException();
-        }
-
         /// <summary>Registering event handler for command class.</summary>
         /// <param name="commandClassId">Id of BG API command class</param>
         /// <param name="eventHandler">Event Handler which will be called when event packet(of command class) received</param>
@@ -279,11 +281,11 @@ namespace BGBLE.BGAPI
         {
             if (_isWatingResponse)
             {
-                throw new Exception("Connection is wating for resposponse.");
+                throw new BGAPIException(0xFF03);
             }
             else if (payloadLength > BGAPIDefinition.COMMAND_PAYLOAD_MAX_LENGTH)
             {
-                throw new Exception("Command with id " + commandId.ToString("X") + " of class " + commandClassId.ToString("X") + " has to long payload (>" + BGAPIDefinition.COMMAND_PAYLOAD_MAX_LENGTH + ").");
+                throw new BGAPIException(0xFE01, "Command with id " + commandId.ToString("X") + " of class " + commandClassId.ToString("X") + " has to long payload (>" + BGAPIDefinition.COMMAND_PAYLOAD_MAX_LENGTH + ").");
             }
             ushort requestDataLength = (ushort)(payloadLength + 4);
             byte[] requestData = new byte[requestDataLength];
@@ -309,11 +311,11 @@ namespace BGBLE.BGAPI
                     _isWatingResponse = false;
                     if (_responseData.header.commandClassId != commandClassId)
                     {
-                        throw new Exception("Received unexpected command class in response, expected id: " + commandClassId.ToString("X") + ", received:  " + _responseData.header.commandClassId.ToString("X"));
+                        throw new BGAPIException(0xFE02, "Received unexpected command class in response, expected id: " + commandClassId.ToString("X") + ", received:  " + _responseData.header.commandClassId.ToString("X"));
                     }
                     else if(_responseData.header.commandId != commandId)
                     {
-                        throw new Exception("Received unexpected command in response, expected id: " + commandId.ToString("X") + ", received:  " + _responseData.header.commandId.ToString("X"));
+                        throw new BGAPIException(0xFE03, "Received unexpected command in response, expected id: " + commandId.ToString("X") + ", received:  " + _responseData.header.commandId.ToString("X"));
                     }
                     BGAPIPacketPayload result = new BGAPIPacketPayload(_responseData.payload, _responseData.header.payloadLength);
                     return result;
@@ -325,7 +327,7 @@ namespace BGBLE.BGAPI
         /// <summary>Returns BGAPIConnection instance. It ensures the existence of only one copy of BGAPIConnection instance.</summary>
         /// <param name="data">Packet data</param>
         /// <returns>Returns object of BGAPIConnection.</returns>
-        public static BGAPIConnection Connection(SerialPort serialPort = null)
+        public static BGAPIConnection SharedConnection(SerialPort serialPort = null)
         {
             if (_instance == null)
             {
