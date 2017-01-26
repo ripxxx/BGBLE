@@ -57,11 +57,13 @@ namespace BGBLE.BGAPI
     {
         public BGAPIPacketHeader header;
         public byte[] payload;
+        public ushort type;
 
-        public BGAPIConnectionEventData(BGAPIPacketHeader _header, byte[] _payload)
+        public BGAPIConnectionEventData(ushort _type, BGAPIPacketHeader _header, byte[] _payload)
         {
             header = _header;
             payload = _payload;
+            type = _type;
         }
     }
     public delegate void BGAPIEventReceivedHandler(BGAPIConnectionEventData eventData);
@@ -70,7 +72,8 @@ namespace BGBLE.BGAPI
     public class BGAPIConnection
     {
         private Dictionary<byte, BGAPIEventReceivedHandler> _eventHandlers;
-        private Dictionary<ushort, List<BGAPIConnectionEventData>> _eventsData;
+        private List<BGAPIConnectionEventData> _eventsData;
+        private Dictionary<ushort, List<ulong>> _eventsDataCount;
         private Dictionary<ushort, Thread> _eventsThreads;
         private bool _isWatingResponse = false;
         private BGAPIConnectionResponseData _responseData;
@@ -82,7 +85,8 @@ namespace BGBLE.BGAPI
         private BGAPIConnection(SerialPort serialPort = null)
         {
             _eventHandlers = new Dictionary<byte, BGAPIEventReceivedHandler>();
-            _eventsData = new Dictionary<ushort, List<BGAPIConnectionEventData>>();
+            _eventsData = new List<BGAPIConnectionEventData>();
+            _eventsDataCount = new Dictionary<ushort, List<ulong>>();
             _eventsThreads = new Dictionary<ushort, Thread>();
             
 
@@ -219,8 +223,9 @@ namespace BGBLE.BGAPI
                             {
                                 if (_eventHandlers.ContainsKey(header.commandClassId)) {
                                     ushort threadId = (ushort)((header.commandClassId << 8) + header.commandId);
-                                    if (!_eventsData.ContainsKey(threadId)) {
-                                        _eventsData[threadId] = new List<BGAPIConnectionEventData>();
+                                    if (!_eventsDataCount.ContainsKey(threadId))
+                                    {
+                                        _eventsDataCount[threadId] = new List<ulong>();
                                     }
                                     if (!_eventsThreads.ContainsKey(threadId))
                                     {
@@ -229,11 +234,16 @@ namespace BGBLE.BGAPI
                                             ushort t_threadId = threadId;
                                             while (true)
                                             {
-                                                if (_eventsData[t_threadId].Count > 0) {
-                                                    
-                                                    //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData[t_threadId].Count);
-                                                    BGAPIConnectionEventData t_eventData = _eventsData[t_threadId].First();
-                                                    _eventsData[t_threadId].RemoveAt(0);
+                                                if ((_eventsDataCount[t_threadId].Count > 0) && (_eventsData.Count > 0))
+                                                {
+                                                    //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData.Count);
+                                                    BGAPIConnectionEventData t_eventData = _eventsData.First();
+                                                    if (t_eventData.type != t_threadId)
+                                                    {
+                                                        continue;
+                                                    }
+                                                    _eventsData.RemoveAt(0);
+                                                    _eventsDataCount[t_threadId].RemoveAt(0);
 
                                                     if (_eventHandlers.ContainsKey(t_commandClassId))
                                                     {
@@ -248,7 +258,8 @@ namespace BGBLE.BGAPI
                                         eventThread.Start();
 
                                     }
-                                    _eventsData[threadId].Add(new BGAPIConnectionEventData(header, data.Take(payloadLength).ToArray()));
+                                    _eventsData.Add(new BGAPIConnectionEventData(threadId, header, data.Take(payloadLength).ToArray()));
+                                    _eventsDataCount[threadId].Add((ulong)(_eventsDataCount[threadId].Count + 1));
                                 }
                             }
                             else if (header.isCommandOrResponse)
