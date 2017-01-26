@@ -12,25 +12,54 @@ using BGBLE.BGAPI;
 
 namespace BGBLE
 {
+    struct BGBLEDeviceCommandCompletition
+    {
+        public ushort attributeHandle;
+        public bool isDone;
+        public ushort result;
+    }
+
+    delegate ushort BGBLEDeviceCommandWaitForCompletitionStartDelegate();
+    delegate ushort BGBLEDeviceCommandWaitForCompletitionFinishDelegate(ushort attributeHandle, ushort result);
+
+    public class BGBLEDeviceDisconnectedEventArgs : EventArgs
+    {
+        public ushort ReasonCode;
+    }
+    public delegate void BGBLEDeviceDisconnectedEventHandler(object sender, BGBLEDeviceDisconnectedEventArgs e);
+
+    public class BGBLEDeviceDescriptorsFoundEventArgs : EventArgs
+    {
+        public Dictionary<ushort, string> Descriptors;
+    }
+    public delegate void BGBLEDeviceDescriptorsFoundEventHandler(object sender, BGBLEDeviceDescriptorsFoundEventArgs e);
+
     /// <summary>This class implements BLE device which using BG API.</summary>
     public class BGBLEDevice
     {
         private BGBLECentral _central;
+        private BGBLEDeviceCommandCompletition _commandComletition = new BGBLEDeviceCommandCompletition();
         private byte _connectionHandle;
         private BGAPIBLEDeviceConnectionStatus _connectionStatus = new BGAPIBLEDeviceConnectionStatus(false, false, false, false);
         private ulong _discoveryPacketsReceived = 0;
         private BGAPIBLEDeviceInfo _info;
         private System.Timers.Timer _timer;
 
+        private Dictionary<ushort, string> _descriptorsByAttributeHandle;
+
         /// <summary>Fires when device information was updated.</summary>
         public event BGBLEDeviceInfoReceivedEventHandler Updated;
         /// <summary>Fires when device was disconnected.</summary>
         public event BGBLEDeviceDisconnectedEventHandler DeviceDisconnected;
+        /// <summary>Fires when descriptors discovery procedure completed.</summary>
+        public event BGBLEDeviceDescriptorsFoundEventHandler DescriptorsFound;
 
         public BGBLEDevice(BGBLECentral central, BGAPIBLEDeviceInfo info)
         {
             _central = central;
             _info = info;
+
+            _descriptorsByAttributeHandle = new Dictionary<ushort, string>();
 
             _timer = new System.Timers.Timer(5000);
             _timer.Elapsed += TimeoutReached;
@@ -89,6 +118,25 @@ namespace BGBLE
         }
         // EVENT HANDLERS
 
+        /// <summary>Runs delegate and waits for procedure completed received.</summary>
+        /// <param name="start">Delegate to start</param>
+        private ushort WaitForCompletition(BGBLEDeviceCommandWaitForCompletitionStartDelegate start, BGBLEDeviceCommandWaitForCompletitionFinishDelegate finish = null)
+        {
+            _commandComletition.isDone = false;
+            ushort result = start.Invoke();
+            if (result != 0)
+            {
+                return result;
+            }
+            while (!_commandComletition.isDone);
+            _commandComletition.isDone = false;
+            if (finish != null)
+            {
+                return finish.Invoke(_commandComletition.attributeHandle, _commandComletition.result);
+            }
+            return _commandComletition.result;
+        }
+
         /// <summary>Connects the device, and set connection handle.</summary>
         /// <returns>TRUE if succesfully connected.</returns>
         public bool Connect()
@@ -99,6 +147,17 @@ namespace BGBLE
                 _timer.Start();
                 while (!_connectionStatus.isCompleted && _timer.Enabled) ;
                 _timer.Stop();
+                //STARTING FIND DESCRIPTORS PROCESS
+                _timer.Start();
+                ushort _result = WaitForCompletition(() => {
+                    return _central.FindDescriptors(_connectionHandle);
+                }, (ushort attributeHandle, ushort result) => {
+                    _timer.Stop();
+                    BGBLEDeviceDescriptorsFoundEventArgs eventArgs = new BGBLEDeviceDescriptorsFoundEventArgs();
+                    eventArgs.Descriptors = _descriptorsByAttributeHandle;
+                    DescriptorsFound?.Invoke(this, eventArgs);
+                    return result;
+                });
                 return true;
             }
             catch (BGAPIException ex)
@@ -176,6 +235,24 @@ namespace BGBLE
             BGBLEDeviceDisconnectedEventArgs eventArgs = new BGBLEDeviceDisconnectedEventArgs();
             eventArgs.ReasonCode = reasonCode;
             DeviceDisconnected?.Invoke(this, eventArgs);
+        }
+
+        /// <summary>Adds descriptor to list.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="uuid">Attribute UUID: 2800, 2803, 2901, 2902, etc.</param>
+        public void DescriptorFound(ushort attributeHandle, string uuid)
+        {
+            _descriptorsByAttributeHandle[attributeHandle] = uuid;
+        }
+
+        /// <summary>Adds descriptor to list.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="uuid">Attribute UUID: 2800, 2803, 2901, 2902, etc.</param>
+        public void ProcedureCompleted(ushort attributeHandle, ushort result)
+        {
+            _commandComletition.attributeHandle = attributeHandle;
+            _commandComletition.isDone = true;
+            _commandComletition.result = result;
         }
 
         /// <summary>Updates device information.</summary>

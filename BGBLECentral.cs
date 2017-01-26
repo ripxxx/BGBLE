@@ -23,12 +23,6 @@ namespace BGBLE
     }
     public delegate void BGBLEDeviceInfoReceivedEventHandler(object sender, BGBLEDeviceInfoReceivedEventArgs e);
 
-    public class BGBLEDeviceDisconnectedEventArgs : EventArgs
-    {
-        public ushort ReasonCode;
-    }
-    public delegate void BGBLEDeviceDisconnectedEventHandler(object sender, BGBLEDeviceDisconnectedEventArgs e);
-
     /// <summary>This class implements BLE central which using BG API.</summary>
     public class BGBLECentral
     {
@@ -38,6 +32,7 @@ namespace BGBLE
         private Dictionary<byte, BGBLEDevice> _devicesByConnectionHandle;
         private byte _maxConnectionsAllowed = 0;
         //COMMANDS CLASSES
+        private BGAPIAttributeClientCommandClass _attributeClientCommandClass;
         private BGAPIConnectionCommandClass _connectionCommandClass;
         private BGAPIGAPCommandClass _gapCommandClass;
         private BGAPISystemCommandClass _systemCommandClass;
@@ -52,6 +47,7 @@ namespace BGBLE
             _devicesByAddress = new Dictionary<string, BGBLEDevice>();
             _devicesByConnectionHandle = new Dictionary<byte, BGBLEDevice>();
 
+            _attributeClientCommandClass = new BGAPIAttributeClientCommandClass(_connection);
             _connectionCommandClass = new BGAPIConnectionCommandClass(_connection);
             _gapCommandClass = new BGAPIGAPCommandClass(_connection);
             _systemCommandClass = new BGAPISystemCommandClass(_connection);
@@ -77,6 +73,8 @@ namespace BGBLE
                 throw new BGAPIException(0xFF91, ex);
             }
 
+            _attributeClientCommandClass.InformationFound += AttributeClientCommandInformationFound;
+            _attributeClientCommandClass.ProcedureCompleted += AttributeClientCommandProcedureCompleted;
             _connectionCommandClass.StatusChanged += ConnectionCommandClassStatusChanged;
             _connectionCommandClass.Disconnected += ConnectionCommandClassDisconnected;
             _gapCommandClass.DeviceFound += GAPCommandClassDeviceFound;
@@ -91,6 +89,28 @@ namespace BGBLE
         // PROPRTIES
 
         // EVENT HANDLERS
+        /// <summary>Event handler for information found event of attribute client command class.</summary>
+        /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
+        /// <param name="e">EventArgs</param>
+        private void AttributeClientCommandInformationFound(object sender, BGAPIAttributeClientCommandClassFindInformationEventArgs e)
+        {
+            if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
+            {
+                _devicesByConnectionHandle[e.ConnectionHandle].DescriptorFound(e.AttributeHandle, e.AttributeUUID);
+            }
+        }
+
+        /// <summary>Event handler for procedure completed event of attribute client command class.</summary>
+        /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
+        /// <param name="e">EventArgs</param>
+        private void AttributeClientCommandProcedureCompleted(object sender, BGAPIAttributeClientCommandClassProcedureCompleteEventArgs e)
+        {
+            if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
+            {
+                _devicesByConnectionHandle[e.ConnectionHandle].ProcedureCompleted(e.AttributeHandle, e.Result);
+            }
+        }
+
         /// <summary>Event handler for connection status event of connection command class.</summary>
         /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
         /// <param name="e">EventArgs</param>
@@ -182,16 +202,26 @@ namespace BGBLE
             return 0xFF93;
         }
 
-        /// <summary>Starts device discovery procedure.</summary>
-        public void FindDevices()
+        /// <summary>Starts descriptors discovery procedure on connected device.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort FindDescriptors(byte connectionHandle)
         {
-            _gapCommandClass.Discover(BGAPIDiscoverMode.Observation);
+            return _attributeClientCommandClass.FindInformation(connectionHandle, 0x0001, 0xFFFF);
+        }
+
+        /// <summary>Starts device discovery procedure.</summary>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort FindDevices()
+        {
+            return _gapCommandClass.Discover(BGAPIDiscoverMode.Observation);
         }
 
         /// <summary>Stops device discovery procedure.</summary>
-        public void StopScanning()
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort StopScanning()
         {
-            _gapCommandClass.EndProcedure();
+            return _gapCommandClass.EndProcedure();
         }
 
         // OVERRIDED METHODS
