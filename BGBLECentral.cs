@@ -73,6 +73,7 @@ namespace BGBLE
                 throw new BGAPIException(0xFF91, ex);
             }
 
+            _attributeClientCommandClass.GroupFound += AttributeClientCommandGroupFound;
             _attributeClientCommandClass.InformationFound += AttributeClientCommandInformationFound;
             _attributeClientCommandClass.ProcedureCompleted += AttributeClientCommandProcedureCompleted;
             _connectionCommandClass.StatusChanged += ConnectionCommandClassStatusChanged;
@@ -89,6 +90,17 @@ namespace BGBLE
         // PROPRTIES
 
         // EVENT HANDLERS
+        /// <summary>Event handler for group found event of attribute client command class.</summary>
+        /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
+        /// <param name="e">EventArgs</param>
+        private void AttributeClientCommandGroupFound(object sender, BGAPIAttributeClientCommandClassGroupFoundEventArgs e)
+        {
+            if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
+            {
+                _devicesByConnectionHandle[e.ConnectionHandle].ServiceFound(e.GroupUUID, e.StartAttributeHandle, e.EndAttributeHandle);
+            }
+        }
+
         /// <summary>Event handler for information found event of attribute client command class.</summary>
         /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
         /// <param name="e">EventArgs</param>
@@ -208,6 +220,14 @@ namespace BGBLE
         public ushort FindDescriptors(byte connectionHandle)
         {
             return _attributeClientCommandClass.FindInformation(connectionHandle, 0x0001, 0xFFFF);
+        }
+
+        /// <summary>Starts find by group type 2800 procedure on connected device.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort FindServices(byte connectionHandle)
+        {
+            return _attributeClientCommandClass.ReadByGroupType(connectionHandle, "2800", 0x0001, 0xFFFF);
         }
 
         /// <summary>Starts device discovery procedure.</summary>

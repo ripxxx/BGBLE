@@ -46,6 +46,7 @@ namespace BGBLE
         private System.Timers.Timer _timer;
 
         private Dictionary<ushort, string> _descriptorsByAttributeHandle;
+        private Dictionary<string, BGBLEService> _servicesByUUID = null;
 
         /// <summary>Fires when device information was updated.</summary>
         public event BGBLEDeviceInfoReceivedEventHandler Updated;
@@ -104,6 +105,20 @@ namespace BGBLE
         {
             get { return _info.rssi; }
             private set { _info.rssi = value; }
+        }
+
+        /// <summary>Available services.</summary>
+        public Dictionary<string, BGBLEService> Services
+        {
+            get {
+                if (_servicesByUUID == null)
+                {
+                    ushort _result = WaitForCompletition(() => {
+                        return _central.FindServices(_connectionHandle);
+                    });
+                }
+                return _servicesByUUID;
+            }
         }
         //PROPRTIES
 
@@ -232,6 +247,11 @@ namespace BGBLE
             _connectionStatus.isCompleted = false;
             _connectionStatus.isConnected = false;
 
+            _descriptorsByAttributeHandle.Clear();
+
+            _servicesByUUID.Clear();
+            _servicesByUUID = null;
+
             BGBLEDeviceDisconnectedEventArgs eventArgs = new BGBLEDeviceDisconnectedEventArgs();
             eventArgs.ReasonCode = reasonCode;
             DeviceDisconnected?.Invoke(this, eventArgs);
@@ -253,6 +273,21 @@ namespace BGBLE
             _commandComletition.attributeHandle = attributeHandle;
             _commandComletition.isDone = true;
             _commandComletition.result = result;
+        }
+
+        /// <summary>Adds service to list.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="uuid">Attribute UUID: 2800, 2803, 2901, 2902, etc.</param>
+        public void ServiceFound(string uuid, ushort startAttributeHandle, ushort endAttributeHandle)
+        {
+            if (_servicesByUUID == null)
+            {
+                _servicesByUUID = new Dictionary<string, BGBLEService>();
+            }
+
+            BGBLEService service = new BGBLEService(this, uuid, startAttributeHandle, endAttributeHandle);
+
+            _servicesByUUID[uuid] = service;
         }
 
         /// <summary>Updates device information.</summary>
