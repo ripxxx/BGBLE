@@ -24,6 +24,7 @@ namespace BGBLE
     public class BGBLECharacteristic
     {
         private BGBLECharacteristicData _blobData = new BGBLECharacteristicData();
+        private string _description = null;
         private ushort _handle;
 
         private bool _isAdditionalPropertiesAvailable;
@@ -68,6 +69,19 @@ namespace BGBLE
         }
 
         //PROPRTIES
+        /// <summary>Description of characteristic.</summary>
+        public string Description
+        {
+            get
+            {
+                if (_description == null)
+                {
+                    _description = _service.ReadCharacteristicDescription(_handle);
+                }
+                return _description;
+            }
+        }
+
         /// <summary>Attribute handle of characteristic.</summary>
         public ushort Handle
         {
@@ -199,6 +213,8 @@ namespace BGBLE
         public override string ToString()
         {
             string result = base.ToString() + "\nUUID: " + _uuid + " <" + _handle + ", " + _valueAttributeHandle + ">";
+
+            result += "\nDescription: " + Description;
 
             result += "\n\tService UUID: " + _service.UUID;
             result += "\n\tBROADCAST: " + ((_isBroadcastSupported)? "Yes": "No");

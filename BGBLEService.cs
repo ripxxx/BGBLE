@@ -126,6 +126,25 @@ namespace BGBLE
             return _device.ReadAttributeValue(attributeHandle);
         }
 
+        /// <summary>Reads characteristic description.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <returns>Characteristic description string.</returns>
+        public string ReadCharacteristicDescription(ushort attributeHandle)
+        {
+            return _device.ReadCharacteristicDescription(attributeHandle);
+        }
+
+        /// <summary>Register characteristic handle alias, for related descriptors.</summary>
+        /// <param name="characteristicHandle">Realated characteristic handle</param>
+        /// <param name="attributeHandle">Realated attribute(descriptor) handle</param>
+        public void RegisterCharacteristicHandleAlias(ushort characteristicHandle, ushort attributeHandle)
+        {
+            if (_characteristicsByHandle.ContainsKey(characteristicHandle) && !_characteristicsByHandle.ContainsKey(attributeHandle))
+            {
+                _characteristicsByHandle[attributeHandle] = _characteristicsByHandle[characteristicHandle];
+            }
+        }
+
         /// <summary>Subscribes for attribute notifications.</summary>
         /// <param name="attributeHandle">Attribute handle</param>
         /// <param name="unsubscribe">Set to TRUE to unsubscribe</param>

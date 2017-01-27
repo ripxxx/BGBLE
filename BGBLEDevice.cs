@@ -435,7 +435,7 @@ namespace BGBLE
             }, (ushort _attributeHandle, ushort result) => {
                 if (_servicesByCharacteristicHandle.ContainsKey(_attributeHandle))
                 {
-                    BGBLECharacteristic characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                    BGBLECharacteristic characteristic = _servicesByCharacteristicHandle[_attributeHandle].FindCharacteristicByHandle(_attributeHandle);
                     if (characteristic != null)
                     {
                         data = characteristic.ValueReadCompleted();
@@ -457,7 +457,7 @@ namespace BGBLE
             }, (ushort _attributeHandle, ushort result) => {
                 if (_servicesByCharacteristicHandle.ContainsKey(_attributeHandle))
                 {
-                    BGBLECharacteristic characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                    BGBLECharacteristic characteristic = _servicesByCharacteristicHandle[_attributeHandle].FindCharacteristicByHandle(_attributeHandle);
                     if (characteristic != null)
                     {
                         data = characteristic.ValueReadCompleted();
@@ -466,6 +466,44 @@ namespace BGBLE
                 return result;
             });
             return data;
+        }
+
+        /// <summary>Reads characteristic description.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <returns>Characteristic description string.</returns>
+        public string ReadCharacteristicDescription(ushort attributeHandle)
+        {
+            string description = "";
+            var descriptorsByCharacteristicHandle = FindDescriptorsByCharacteristicHandle(attributeHandle);
+            if ((descriptorsByCharacteristicHandle != null) && (descriptorsByCharacteristicHandle.Count > 0))
+            {
+                var handles = descriptorsByCharacteristicHandle.Where(entry => entry.Value == "2901").ToArray();
+                if (handles.Length > 0)
+                {
+                    ushort _handle = handles.First().Key;
+                    BGBLEService service = FindServiceByAttributeHandle(_handle);
+                    if (service != null)
+                    {
+                        service.RegisterCharacteristicHandleAlias(attributeHandle, _handle);
+                        var _result = WaitForCompletition(() => {
+                            return _central.ReadAttributeValue(_connectionHandle, _handle);
+                        }, (ushort _attributeHandle, ushort result) => {
+                            if (_servicesByCharacteristicHandle.ContainsKey(_attributeHandle))
+                            {
+                                BGBLECharacteristic characteristic = _servicesByCharacteristicHandle[_attributeHandle].FindCharacteristicByHandle(_attributeHandle);
+                                if (characteristic != null)
+                                {
+                                    var data = characteristic.ValueReadCompleted();
+                                    description = Encoding.UTF8.GetString(data.data.Take((int)data.count).ToArray());
+                                }
+                            }
+                            return result;
+                        });
+                    }
+
+                }
+            }
+            return description;
         }
 
         /// <summary>Adds service to list.</summary>
