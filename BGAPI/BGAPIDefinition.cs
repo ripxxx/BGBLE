@@ -256,6 +256,9 @@ namespace BGBLE.BGAPI
                 { 0xFF92, new BGAPIError(0xFF92, "Bluegiga BLED112 unable connect to device", "BGBLE", "Bluegiga BLED112 unable connect to device") },
                 { 0xFF93, new BGAPIError(0xFF93, "Bluegiga BLED112 failed to disconnect from device", "BGBLE", "Bluegiga BLED112 failed to disconnect from device") },
                 { 0xFF94, new BGAPIError(0xFF94, "Bluegiga BLED112 device command execution timeout", "BGBLE", "Bluegiga BLED112 device command execution timeout") },
+                { 0xFF95, new BGAPIError(0xFF95, "BGBLECharacteristic config to short", "BGBLE", "BGBLECharacteristic config to short") },
+                { 0xFF96, new BGAPIError(0xFF96, "BGBLECharacteristic operation not supported", "BGBLE", "BGBLECharacteristic operation not supported") },
+                { 0xFF97, new BGAPIError(0xFF97, "Bluegiga BLED112 device failed to execute command", "BGBLE", "Bluegiga BLED112 device failed to execute command") },
             };
 
             if (errors.ContainsKey(errorCode))
