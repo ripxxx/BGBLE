@@ -12,6 +12,17 @@ using BGBLE.BGAPI;
 
 namespace BGBLE
 {
+    public struct BGBLECharacteristicData
+    {
+        public ulong count;
+        public byte[] data;
+
+        public BGBLECharacteristicData(byte[] _data, ulong _count)
+        {
+            count = _count;
+            data = _data;
+        }
+    }
     struct BGBLEDeviceCommandCompletition
     {
         public ushort attributeHandle;
@@ -45,7 +56,9 @@ namespace BGBLE
         private BGAPIBLEDeviceInfo _info;
         private System.Timers.Timer _timer;
 
-        private Dictionary<ushort, string> _descriptorsByAttributeHandle;
+        private Dictionary<ushort, string> _descriptorsByAttributeHandle = new Dictionary<ushort, string>();
+        private Dictionary<ushort, BGBLEService> _servicesByCharacteristicHandle = new Dictionary<ushort, BGBLEService>();
+        private Dictionary<ushort, BGBLEService> _servicesByHandle = new Dictionary<ushort, BGBLEService>();
         private Dictionary<string, BGBLEService> _servicesByUUID = null;
 
         /// <summary>Fires when device information was updated.</summary>
@@ -59,8 +72,6 @@ namespace BGBLE
         {
             _central = central;
             _info = info;
-
-            _descriptorsByAttributeHandle = new Dictionary<ushort, string>();
 
             _timer = new System.Timers.Timer(5000);
             _timer.Elapsed += TimeoutReached;
@@ -150,6 +161,69 @@ namespace BGBLE
                 return finish.Invoke(_commandComletition.attributeHandle, _commandComletition.result);
             }
             return _commandComletition.result;
+        }
+
+        /// <summary>Process attribute indicated event.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        public void AttributeIndicated(ushort attributeHandle)
+        {
+            //Not Implemented
+        }
+
+        /// <summary>Process attribute value event.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="attributeValueType">Attribute value type: Read, Notify, Indicate, etc.</param>
+        /// <param name="data">Payload</param>
+        /// <param name="count">Payload length</param>
+        public void AttributeValue(ushort attributeHandle, BGAPIAttributeValueType attributeValueType, byte[] data, byte count)
+        {
+            BGBLECharacteristic characteristic;
+            switch (attributeValueType)
+            {
+                case BGAPIAttributeValueType.Indicate:
+                    if (_servicesByCharacteristicHandle.ContainsKey(attributeHandle))
+                    {
+                        characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                        characteristic?.AttributeIndicated(data, count);
+                    }
+                    break;
+                case BGAPIAttributeValueType.IndicateRSPReq:
+                    //Not implemented
+                    break;
+                case BGAPIAttributeValueType.Notify:
+                    if (_servicesByCharacteristicHandle.ContainsKey(attributeHandle))
+                    {
+                        characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                        characteristic?.AttributeNotified(data, count);
+                    }
+                    break;
+                case BGAPIAttributeValueType.Read:
+                    if (_servicesByCharacteristicHandle.ContainsKey(attributeHandle))
+                    {
+                        characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                        characteristic?.ValueRead(data, count);
+                        ProcedureCompleted(attributeHandle, 0x0000);
+                    }
+                    break;
+                case BGAPIAttributeValueType.ReadBlob:
+                    if (_servicesByCharacteristicHandle.ContainsKey(attributeHandle))
+                    {
+                        characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                        characteristic?.ValueReadBlob(data, count);
+                    }
+                    break;
+                case BGAPIAttributeValueType.ReadByType:
+                    BGBLEService service = FindServiceByAttributeHandle(attributeHandle);
+                    if (service != null)
+                    {
+                        //_servicesByCharacteristicHandle[attributeHandle] = service;//_servicesByHandle[service.Handle];
+                        var _characteristic = service.CharacteristicFound(attributeHandle, data, count);
+                        _servicesByCharacteristicHandle[_characteristic.ValueAttributeHandle] = service;
+                    }
+                    break;
+                default:
+                    break;
+            }
         }
 
         /// <summary>Connects the device, and set connection handle.</summary>
@@ -249,6 +323,8 @@ namespace BGBLE
 
             _descriptorsByAttributeHandle.Clear();
 
+            _servicesByCharacteristicHandle.Clear();
+            _servicesByHandle.Clear();
             _servicesByUUID.Clear();
             _servicesByUUID = null;
 
@@ -265,6 +341,79 @@ namespace BGBLE
             _descriptorsByAttributeHandle[attributeHandle] = uuid;
         }
 
+        /// <summary>Starts find characteristics procedure on connected device.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <param name="startHandle">Handle to start from, start of service handles range</param>
+        /// <param name="endHandle">>Handle to end at, end of service handles range</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort FindCharacteristics(ushort startHandle, ushort endHandle)
+        {
+            ushort _result = WaitForCompletition(() => {
+                return _central.FindCharacteristics(_connectionHandle, startHandle, endHandle);
+            });
+            return _result;
+        }
+
+        /// <summary>Searches for descriptors which follows specified characteristic handle.</summary>
+        /// <param name="handle">Characteristic handle</param>
+        /// <returns>Dictionary with found descriptors or null if nothing found.</returns>
+        public Dictionary<ushort, string> FindDescriptorsByCharacteristicHandle(ushort handle)
+        {
+            if ((_descriptorsByAttributeHandle.Count > 0) && _descriptorsByAttributeHandle.ContainsKey(handle))
+            {
+                var descriptorsByCharacteristicHandle = _descriptorsByAttributeHandle.SkipWhile(entry => entry.Key != handle).TakeWhile(entry => ((entry.Value != "2803") || (entry.Key == handle))).ToDictionary(entry => entry.Key, entry => entry.Value);
+                return descriptorsByCharacteristicHandle;
+            }
+            return null;
+        }
+
+        /// <summary>Searches for service with attribute handle in range.</summary>
+        /// <param name="attributeHandle">Service handle, characteristic handle or descriptor handle</param>
+        /// <returns>service or null if nothing found.</returns>
+        public BGBLEService FindServiceByAttributeHandle(ushort attributeHandle)
+        {
+            if((_servicesByCharacteristicHandle.Count > 0) && _servicesByCharacteristicHandle.ContainsKey(attributeHandle))
+            {
+                return _servicesByCharacteristicHandle[attributeHandle];
+            }
+            else if ((Services.Count > 0) && (_servicesByHandle.Count > 0))
+            {
+                foreach (KeyValuePair<ushort, BGBLEService> entry in _servicesByHandle)
+                {
+                    if (entry.Value.IsAttributeInServiceRange(attributeHandle))
+                    {
+                        _servicesByCharacteristicHandle[attributeHandle] = entry.Value;
+                        return entry.Value;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>Searches for service by handle.</summary>
+        /// <param name="attributeHandle">Service handle</param>
+        /// <returns>service or null if nothing found.</returns>
+        public BGBLEService FindServiceByHandle(ushort handle)
+        {
+            if ((Services.Count > 0) && (_servicesByHandle.ContainsKey(handle)))
+            {
+                return _servicesByHandle[handle];
+            }
+            return null;
+        }
+
+        /// <summary>Searches for service by UUID.</summary>
+        /// <param name="uuid">Service UUID</param>
+        /// <returns>service or null if nothing found.</returns>
+        public BGBLEService FindServiceByUUID(string uuid)
+        {
+            if ((Services.Count > 0) && (_servicesByUUID.ContainsKey(uuid)))
+            {
+                return _servicesByUUID[uuid];
+            }
+            return null;
+        }
+
         /// <summary>Adds descriptor to list.</summary>
         /// <param name="attributeHandle">Attribute handle</param>
         /// <param name="uuid">Attribute UUID: 2800, 2803, 2901, 2902, etc.</param>
@@ -275,10 +424,56 @@ namespace BGBLE
             _commandComletition.result = result;
         }
 
-        /// <summary>Adds service to list.</summary>
+        /// <summary>Reads attribute long value.</summary>
         /// <param name="attributeHandle">Attribute handle</param>
-        /// <param name="uuid">Attribute UUID: 2800, 2803, 2901, 2902, etc.</param>
-        public void ServiceFound(string uuid, ushort startAttributeHandle, ushort endAttributeHandle)
+        /// <returns>Characteristic data structure.</returns>
+        public BGBLECharacteristicData ReadAttributeLongValue(ushort attributeHandle)
+        {
+            BGBLECharacteristicData data = new BGBLECharacteristicData(null, 0);
+            ushort _result = WaitForCompletition(() => {
+                return _central.ReadAttributeLongValue(_connectionHandle, attributeHandle);
+            }, (ushort _attributeHandle, ushort result) => {
+                if (_servicesByCharacteristicHandle.ContainsKey(_attributeHandle))
+                {
+                    BGBLECharacteristic characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                    if (characteristic != null)
+                    {
+                        data = characteristic.ValueReadCompleted();
+                    }
+                }
+                return result;
+            });
+            return data;
+        }
+
+        /// <summary>Reads attribute value.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <returns>Characteristic data structure.</returns>
+        public BGBLECharacteristicData ReadAttributeValue(ushort attributeHandle)
+        {
+            BGBLECharacteristicData data = new BGBLECharacteristicData(null, 0);
+            ushort _result = WaitForCompletition(() => {
+                return _central.ReadAttributeValue(_connectionHandle, attributeHandle);
+            }, (ushort _attributeHandle, ushort result) => {
+                if (_servicesByCharacteristicHandle.ContainsKey(_attributeHandle))
+                {
+                    BGBLECharacteristic characteristic = _servicesByCharacteristicHandle[attributeHandle].FindCharacteristicByHandle(attributeHandle);
+                    if (characteristic != null)
+                    {
+                        data = characteristic.ValueReadCompleted();
+                    }
+                }
+                return result;
+            });
+            return data;
+        }
+
+        /// <summary>Adds service to list.</summary>
+        /// <param name="uuid">Service UUID handle</param>
+        /// <param name="startAttributeHandle">First handle in service handles range</param>
+        /// <param name="endAttributeHandle">Last handle in service handles range</param>
+        /// <returns>Service object.</returns>
+        public BGBLEService ServiceFound(string uuid, ushort startAttributeHandle, ushort endAttributeHandle)
         {
             if (_servicesByUUID == null)
             {
@@ -287,7 +482,52 @@ namespace BGBLE
 
             BGBLEService service = new BGBLEService(this, uuid, startAttributeHandle, endAttributeHandle);
 
+            _servicesByHandle[startAttributeHandle] = service;
             _servicesByUUID[uuid] = service;
+
+            return service;
+        }
+
+        /// <summary>Subscribes for attribute notifications.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="unsubscribe">Set to TRUE to unsubscribe</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort SubscribeForAttributeNotification(ushort attributeHandle, bool unsubscribe = false)
+        {
+            var descriptorsByCharacteristicHandle = FindDescriptorsByCharacteristicHandle(attributeHandle);
+            if ((descriptorsByCharacteristicHandle != null) && (descriptorsByCharacteristicHandle.Count > 0))
+            {
+                List<string> uuids = new List<string>() { "2902" };
+                var service = FindServiceByAttributeHandle(attributeHandle);
+                if (service != null) {
+                    var characteristic = service.FindCharacteristicByHandle(attributeHandle);
+                    if (characteristic != null)
+                    {
+                        uuids.Add(characteristic.UUID);
+                    }
+                }
+
+                foreach (var uuid in uuids)
+                {
+                    var handles = descriptorsByCharacteristicHandle.Where(entry => entry.Value == uuid).ToArray();
+                    if (handles.Length > 0)
+                    {
+                        ushort _handle = handles.First().Key;
+                        if (uuid == "2902") {
+                            return _central.WriteAttributeValueWithoutAcknowledgment(_connectionHandle, _handle, new byte[] { (byte)((unsubscribe) ? 0x00 : 0x01), 0x00 }, 2);
+                        }
+                        else
+                        {
+                            var result = WaitForCompletition(() => {
+                                return _central.ReadAttributeValue(_connectionHandle, _handle);
+                            });
+
+                            return result;
+                        }
+                    }
+                }
+            }
+            return 0xFF97;
         }
 
         /// <summary>Updates device information.</summary>
@@ -329,6 +569,39 @@ namespace BGBLE
             eventArgs.Device = this;
             eventArgs.RSSI = info.rssi;
             Updated?.Invoke(this, eventArgs);
+        }
+
+        // <summary>Writes data to attribute.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="data">Data to write</param>
+        /// <param name="count">Data length</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WriteAttributeValue(ushort attributeHandle, byte[] data, ushort count)
+        {
+            ushort result = 0x0000;
+            if (count > 20) {
+                for (ushort i = 0; i < count; i += 18)
+                {
+                    byte _count = (byte)(((count - i) > 18)? 18: (count - i));
+                    result = WaitForCompletition(() => {
+                        return _central.WriteAttributeValuePrepare(_connectionHandle, attributeHandle, data, i, _count);
+                    });
+                    if (result != 0)
+                    {
+                        break;
+                    }
+                }
+                result = WaitForCompletition(() => {
+                    return _central.WritePreparedAttributeValue(_connectionHandle, (result == 0));
+                });
+            }
+            else
+            {
+                result = WaitForCompletition(() => {
+                    return _central.WriteAttributeValueWithAcknowledgment(_connectionHandle, attributeHandle, data, (byte)count);
+                });
+            }
+            return result;
         }
 
         // OVERRIDED METHODS

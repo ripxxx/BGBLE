@@ -35,7 +35,7 @@ namespace BGBLE.BGAPI
         public ushort AttributeHandle { get; set; }
 
         /// <summary>Attribute type.</summary>
-        public BGAPIAttributeValueType AttributeType { get; set; }
+        public BGAPIAttributeValueType AttributeValueType { get; set; }
 
         /// <summary>Connection handle.</summary>
         public byte ConnectionHandle { get; set; }
@@ -129,7 +129,7 @@ namespace BGBLE.BGAPI
                             BGAPIAttributeClientCommandClassAttributeValueEventArgs eventArgs = new BGAPIAttributeClientCommandClassAttributeValueEventArgs();
                             eventArgs.ConnectionHandle = eventData.payload[0];
                             eventArgs.AttributeHandle = BitConverter.ToUInt16(eventData.payload.Skip(1).Take(2).ToArray(), 0);
-                            eventArgs.AttributeType = (BGAPIAttributeValueType)eventData.payload[3];
+                            eventArgs.AttributeValueType = (BGAPIAttributeValueType)eventData.payload[3];
                             byte _count = eventData.payload[4];
                             eventArgs.AttributeDataLength = _count;
                             eventArgs.AttributeData = eventData.payload.Skip(5).Take(_count).ToArray();

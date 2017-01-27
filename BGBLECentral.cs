@@ -73,9 +73,13 @@ namespace BGBLE
                 throw new BGAPIException(0xFF91, ex);
             }
 
-            _attributeClientCommandClass.GroupFound += AttributeClientCommandGroupFound;
-            _attributeClientCommandClass.InformationFound += AttributeClientCommandInformationFound;
-            _attributeClientCommandClass.ProcedureCompleted += AttributeClientCommandProcedureCompleted;
+            _attributeClientCommandClass.AttributeValue += AttributeClientCommandClassAttributeValue;
+            _attributeClientCommandClass.GroupFound += AttributeClientCommandClassGroupFound;
+            _attributeClientCommandClass.Indicated += AttributeClientCommandClassIndicated;
+            _attributeClientCommandClass.InformationFound += AttributeClientCommandClassInformationFound;
+            _attributeClientCommandClass.ProcedureCompleted += AttributeClientCommandClassProcedureCompleted;
+            //_attributeClientCommandClass.ReadMultiple += AttributeClientCommandClassReadMultiple;
+
             _connectionCommandClass.StatusChanged += ConnectionCommandClassStatusChanged;
             _connectionCommandClass.Disconnected += ConnectionCommandClassDisconnected;
             _gapCommandClass.DeviceFound += GAPCommandClassDeviceFound;
@@ -90,10 +94,21 @@ namespace BGBLE
         // PROPRTIES
 
         // EVENT HANDLERS
+        /// <summary>Event handler for attribute value event of attribute client command class.</summary>
+        /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
+        /// <param name="e">EventArgs</param>
+        private void AttributeClientCommandClassAttributeValue(object sender, BGAPIAttributeClientCommandClassAttributeValueEventArgs e)
+        {
+            if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
+            {
+                _devicesByConnectionHandle[e.ConnectionHandle].AttributeValue(e.AttributeHandle, e.AttributeValueType, e.AttributeData, e.AttributeDataLength);
+            }
+        }
+
         /// <summary>Event handler for group found event of attribute client command class.</summary>
         /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
         /// <param name="e">EventArgs</param>
-        private void AttributeClientCommandGroupFound(object sender, BGAPIAttributeClientCommandClassGroupFoundEventArgs e)
+        private void AttributeClientCommandClassGroupFound(object sender, BGAPIAttributeClientCommandClassGroupFoundEventArgs e)
         {
             if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
             {
@@ -101,10 +116,21 @@ namespace BGBLE
             }
         }
 
+        /// <summary>Event handler for indicated event of attribute client command class.</summary>
+        /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
+        /// <param name="e">EventArgs</param>
+        private void AttributeClientCommandClassIndicated(object sender, BGAPIAttributeClientCommandClassIndicateEventArgs e)
+        {
+            if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
+            {
+                _devicesByConnectionHandle[e.ConnectionHandle].AttributeIndicated(e.AttributeHandle);
+            }
+        }
+
         /// <summary>Event handler for information found event of attribute client command class.</summary>
         /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
         /// <param name="e">EventArgs</param>
-        private void AttributeClientCommandInformationFound(object sender, BGAPIAttributeClientCommandClassFindInformationEventArgs e)
+        private void AttributeClientCommandClassInformationFound(object sender, BGAPIAttributeClientCommandClassFindInformationEventArgs e)
         {
             if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
             {
@@ -115,7 +141,7 @@ namespace BGBLE
         /// <summary>Event handler for procedure completed event of attribute client command class.</summary>
         /// <param name="sender">Instace of BGBLECentral class which generated the event</param>
         /// <param name="e">EventArgs</param>
-        private void AttributeClientCommandProcedureCompleted(object sender, BGAPIAttributeClientCommandClassProcedureCompleteEventArgs e)
+        private void AttributeClientCommandClassProcedureCompleted(object sender, BGAPIAttributeClientCommandClassProcedureCompleteEventArgs e)
         {
             if (_devicesByConnectionHandle.ContainsKey(e.ConnectionHandle))
             {
@@ -214,7 +240,17 @@ namespace BGBLE
             return 0xFF93;
         }
 
-        /// <summary>Starts descriptors discovery procedure on connected device.</summary>
+        /// <summary>Starts read by type 2803 procedure on connected device. Procedure completed event will be generated.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <param name="startHandle">Handle to start from, start of service handles range</param>
+        /// <param name="endHandle">>Handle to end at, end of service handles range</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort FindCharacteristics(byte connectionHandle, ushort startHandle, ushort endHandle)
+        {
+            return _attributeClientCommandClass.ReadAttributeByType(connectionHandle, "2803", startHandle, endHandle);
+        }
+
+        /// <summary>Starts descriptors discovery procedure on connected device. Procedure completed event will be generated.</summary>
         /// <param name="connectionHandle">Connection handle</param>
         /// <returns>Error code, 0x0000 if success.</returns>
         public ushort FindDescriptors(byte connectionHandle)
@@ -222,7 +258,7 @@ namespace BGBLE
             return _attributeClientCommandClass.FindInformation(connectionHandle, 0x0001, 0xFFFF);
         }
 
-        /// <summary>Starts find by group type 2800 procedure on connected device.</summary>
+        /// <summary>Starts find by group type 2800 procedure on connected device. Procedure completed event will be generated.</summary>
         /// <param name="connectionHandle">Connection handle</param>
         /// <returns>Error code, 0x0000 if success.</returns>
         public ushort FindServices(byte connectionHandle)
@@ -235,6 +271,66 @@ namespace BGBLE
         public ushort FindDevices()
         {
             return _gapCommandClass.Discover(BGAPIDiscoverMode.Observation);
+        }
+
+        // <summary>Starts attribute value read procedure on connected device.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort ReadAttributeValue(byte connectionHandle, ushort attributeHandle)
+        {
+            return _attributeClientCommandClass.ReadAttributeByHandle(connectionHandle, attributeHandle);
+        }
+
+        // <summary>Starts attribute long value read procedure on connected device. Procedure completed event will be generated.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort ReadAttributeLongValue(byte connectionHandle, ushort attributeHandle)
+        {
+            return _attributeClientCommandClass.ReadAttributeByHandleLong(connectionHandle, attributeHandle);
+        }
+
+        // <summary>Starts attribute value prepare write procedure on connected device. Procedure completed event will be generated.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="data">Data to write</param>
+        /// <param name="offset">Data offset</param>
+        /// <param name="count">Data lemgth</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WriteAttributeValuePrepare(byte connectionHandle, ushort attributeHandle, byte[] data, ushort offset, byte count)
+        {
+            return _attributeClientCommandClass.PrepareWriteAttributeByHandle(connectionHandle, attributeHandle, data, offset, count);
+        }
+
+        // <summary>Starts attribute value write with acknowledgment procedure on connected device. Procedure completed event will be generated.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="data">Data to write</param>
+        /// <param name="count">Data lemgth</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WriteAttributeValueWithAcknowledgment(byte connectionHandle, ushort attributeHandle, byte[] data, byte count)
+        {
+            return _attributeClientCommandClass.WriteAttributeByHandleWithAcknowledgment(connectionHandle, attributeHandle, data, count);
+        }
+
+        // <summary>Starts attribute value write without acknowledgment procedure on connected device.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="data">Data to write</param>
+        /// <param name="count">Data lemgth</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WriteAttributeValueWithoutAcknowledgment(byte connectionHandle, ushort attributeHandle, byte[] data, byte count)
+        {
+            return _attributeClientCommandClass.WriteAttributeByHandle(connectionHandle, attributeHandle, data, count);
+        }
+
+        // <summary>Starts execute write procedure(send prepered data) on connected device. Procedure completed event will be generated.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WritePreparedAttributeValue(byte connectionHandle, bool commit = true)
+        {
+            return _attributeClientCommandClass.ExecuteWrite(connectionHandle, commit);
         }
 
         /// <summary>Stops device discovery procedure.</summary>
