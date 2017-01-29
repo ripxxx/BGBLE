@@ -158,10 +158,11 @@ namespace BGBLE
         /// <param name="attributeHandle">Attribute handle</param>
         /// <param name="data">Data to write</param>
         /// <param name="count">Data length</param>
+        /// <param name="doNotWaiteCompletition">Do not wait for procedure completed event</param>
         /// <returns>Error code, 0x0000 if success.</returns>
-        public ushort WriteAttributeValue(ushort attributeHandle, byte[] data, ushort count)
+        public ushort WriteAttributeValue(ushort attributeHandle, byte[] data, ushort count, bool doNotWaiteCompletition = false)
         {
-            return _device.WriteAttributeValue(attributeHandle, data, count);
+            return _device.WriteAttributeValue(attributeHandle, data, count, doNotWaiteCompletition);
         }
     }
 }

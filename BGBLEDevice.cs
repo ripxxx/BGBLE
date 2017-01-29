@@ -325,8 +325,10 @@ namespace BGBLE
 
             _servicesByCharacteristicHandle.Clear();
             _servicesByHandle.Clear();
-            _servicesByUUID.Clear();
-            _servicesByUUID = null;
+            if(_servicesByUUID != null) {
+                _servicesByUUID.Clear();
+                _servicesByUUID = null;
+            }
 
             BGBLEDeviceDisconnectedEventArgs eventArgs = new BGBLEDeviceDisconnectedEventArgs();
             eventArgs.ReasonCode = reasonCode;
@@ -613,8 +615,9 @@ namespace BGBLE
         /// <param name="attributeHandle">Attribute handle</param>
         /// <param name="data">Data to write</param>
         /// <param name="count">Data length</param>
+        /// <param name="doNotWaiteCompletition">Do not wait for procedure completed event</param>
         /// <returns>Error code, 0x0000 if success.</returns>
-        public ushort WriteAttributeValue(ushort attributeHandle, byte[] data, ushort count)
+        public ushort WriteAttributeValue(ushort attributeHandle, byte[] data, ushort count, bool doNotWaiteCompletition = false)
         {
             ushort result = 0x0000;
             if (count > 20) {
@@ -635,6 +638,10 @@ namespace BGBLE
             }
             else
             {
+                if(doNotWaiteCompletition)
+                {
+                    return _central.WriteAttributeValueWithAcknowledgment(_connectionHandle, attributeHandle, data, (byte)count);
+                }
                 result = WaitForCompletition(() => {
                     return _central.WriteAttributeValueWithAcknowledgment(_connectionHandle, attributeHandle, data, (byte)count);
                 });

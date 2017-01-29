@@ -198,12 +198,13 @@ namespace BGBLE
         // <summary>Writes data to attribute.</summary>
         /// <param name="data">Data to write</param>
         /// <param name="count">Data length</param>
+        /// <param name="doNotWaiteCompletition">Do not wait for procedure completed event</param>
         /// <returns>Error code, 0x0000 if success.</returns>
-        public ushort Write(byte[] data, ushort count)
+        public ushort Write(byte[] data, ushort count, bool doNotWaiteCompletition = false)
         {
             if (_isWriteSupported)
             {
-                return _service.WriteAttributeValue(_handle, data, count);
+                return _service.WriteAttributeValue(_valueAttributeHandle, data, count, doNotWaiteCompletition);
             }
             throw new BGAPIException(0xFF96, "BGBLECharacteristic write operation not supported");
         }
