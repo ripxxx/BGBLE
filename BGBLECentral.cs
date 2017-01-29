@@ -85,6 +85,11 @@ namespace BGBLE
             _gapCommandClass.DeviceFound += GAPCommandClassDeviceFound;
         }
 
+        ~BGBLECentral()
+        {
+            Close();
+        }
+
         // PROPRTIES
         /// <summary>Shared BG API Connection.</summary>
         public BGAPIConnection Connection
@@ -202,6 +207,12 @@ namespace BGBLE
             }
         }
         // EVENT HANDLERS
+
+        /// <summary>Closes connection.</summary>
+        public void Close()
+        {
+            _connection?.Close();
+        }
 
         /// <summary>Starts connect procedure.</summary>
         /// <param name="address">MAC address of BLE device</param>

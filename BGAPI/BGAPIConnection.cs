@@ -104,7 +104,8 @@ namespace BGBLE.BGAPI
                     throw new BGAPIException(0xFF01);
                 }
             }
-            else {
+            else
+            {
                 _serialPort = serialPort;
             }
             if (_serialPort.IsOpen)
@@ -122,10 +123,7 @@ namespace BGBLE.BGAPI
 
         ~BGAPIConnection()
         {
-            if (_serialPort.IsOpen)
-            {
-                _serialPort.Close();
-            }
+            Close();
         }
 
         // EVENT HANDLERS
@@ -232,7 +230,7 @@ namespace BGBLE.BGAPI
                                         Thread eventThread = new Thread(() => {
                                             byte t_commandClassId = header.commandClassId;
                                             ushort t_threadId = threadId;
-                                            while (true)
+                                            while (_serialPort.IsOpen)
                                             {
                                                 if ((_eventsDataCount[t_threadId].Count > 0) && (_eventsData.Count > 0))
                                                 {
@@ -242,15 +240,16 @@ namespace BGBLE.BGAPI
                                                     {
                                                         continue;
                                                     }
-                                                    _eventsData.RemoveAt(0);
-                                                    _eventsDataCount[t_threadId].RemoveAt(0);
 
                                                     if (_eventHandlers.ContainsKey(t_commandClassId))
                                                     {
                                                         _eventHandlers[header.commandClassId].Invoke(t_eventData);
                                                     }
+
+                                                    _eventsData.RemoveAt(0);
+                                                    _eventsDataCount[t_threadId].RemoveAt(0);
                                                 }
-                                                Thread.Sleep(10);
+                                                Thread.Sleep(2);
                                             }
                                         });
                                         _eventsThreads[threadId] = eventThread;
@@ -272,6 +271,15 @@ namespace BGBLE.BGAPI
                     }
                 }
             } while (serialPort.BytesToRead > 0);
+        }
+
+        /// <summary>Closes the serial port.</summary>
+        public void Close()
+        {
+            if ((_serialPort != null) && _serialPort.IsOpen)
+            {
+                _serialPort.Close();
+            }
         }
 
         /// <summary>Registering event handler for command class.</summary>
