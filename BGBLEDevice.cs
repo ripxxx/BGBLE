@@ -45,6 +45,8 @@ namespace BGBLE
     }
     public delegate void BGBLEDeviceDescriptorsFoundEventHandler(object sender, BGBLEDeviceDescriptorsFoundEventArgs e);
 
+    public delegate void BGBLEDeviceRSSIUpdatedEventHandler(object sender, BGBLEDeviceInfoReceivedEventArgs e);
+
     /// <summary>This class implements BLE device which using BG API.</summary>
     public class BGBLEDevice
     {
@@ -61,12 +63,14 @@ namespace BGBLE
         private Dictionary<ushort, BGBLEService> _servicesByHandle = new Dictionary<ushort, BGBLEService>();
         private Dictionary<string, BGBLEService> _servicesByUUID = null;
 
-        /// <summary>Fires when device information was updated.</summary>
-        public event BGBLEDeviceInfoReceivedEventHandler Updated;
-        /// <summary>Fires when device was disconnected.</summary>
-        public event BGBLEDeviceDisconnectedEventHandler DeviceDisconnected;
         /// <summary>Fires when descriptors discovery procedure completed.</summary>
         public event BGBLEDeviceDescriptorsFoundEventHandler DescriptorsFound;
+        /// <summary>Fires when device was disconnected.</summary>
+        public event BGBLEDeviceDisconnectedEventHandler DeviceDisconnected;
+        /// <summary>Fires when device RSSI updated.</summary>
+        public event BGBLEDeviceInfoReceivedEventHandler RSSIUpdated;
+        /// <summary>Fires when device information was updated.</summary>
+        public event BGBLEDeviceInfoReceivedEventHandler Updated;
 
         public BGBLEDevice(BGBLECentral central, BGAPIBLEDeviceInfo info)
         {
@@ -416,6 +420,24 @@ namespace BGBLE
             return null;
         }
 
+        /// <summary>Gets RSSI of the device.</summary>
+        /// <returns>RSSI value.</returns>
+        public sbyte GetRSSI()
+        {
+            if (_connectionStatus.isConnected) {
+                sbyte rssi = _central.GetRSSIOfConnection(_connectionHandle);
+                if (rssi != _info.rssi)
+                {
+                    _info.rssi = rssi;
+                    BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
+                    eventArgs.Device = this;
+                    eventArgs.RSSI = rssi;
+                    RSSIUpdated?.Invoke(this, eventArgs);
+                }
+            }
+            return _info.rssi;
+        }
+
         /// <summary>Adds descriptor to list.</summary>
         /// <param name="attributeHandle">Attribute handle</param>
         /// <param name="uuid">Attribute UUID: 2800, 2803, 2901, 2902, etc.</param>
@@ -574,6 +596,9 @@ namespace BGBLE
         /// <param name="info">Strucuture with device information from advertisment or scan packet</param>
         public void Update(BGAPIBLEDeviceInfo info)
         {
+            BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
+            eventArgs.Device = this;
+
             _discoveryPacketsReceived += 1;
             _info.bond = info.bond;
             _info.connectableAdvertisementPacket += info.connectableAdvertisementPacket;
@@ -591,7 +616,17 @@ namespace BGBLE
             _info.maxConnectionInterval = ((info.maxConnectionInterval > 0) ? info.maxConnectionInterval : _info.maxConnectionInterval);
             _info.minConnectionInterval = ((info.minConnectionInterval > 0) ? info.minConnectionInterval : _info.minConnectionInterval);
             _info.name = ((info.name != "") ? info.name : _info.name);
-            _info.rssi = info.rssi;
+            if (_info.rssi != info.rssi)
+            {
+                _info.rssi = info.rssi;
+                
+                eventArgs.RSSI = info.rssi;
+                RSSIUpdated?.Invoke(this, eventArgs);
+            }
+            else
+            {
+                eventArgs.RSSI = info.rssi;
+            }
             _info.txPower = ((info.txPower > 0) ? info.txPower : _info.txPower);
             if ((info.services != null) && (info.services.Count > 0))
             {
@@ -605,9 +640,6 @@ namespace BGBLE
                 }
             }
 
-            BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
-            eventArgs.Device = this;
-            eventArgs.RSSI = info.rssi;
             Updated?.Invoke(this, eventArgs);
         }
 

@@ -284,6 +284,14 @@ namespace BGBLE
             return _gapCommandClass.Discover(BGAPIDiscoverMode.Observation);
         }
 
+        /// <summary>Gets RSSI of connected device.</summary>
+        /// <param name="connectionHandle">Connection handle</param>
+        /// <returns>RSSI value.</returns>
+        public sbyte GetRSSIOfConnection(byte connectionHandle)
+        {
+            return _connectionCommandClass.GetRSSI(connectionHandle);
+        }
+
         // <summary>Starts attribute value read procedure on connected device.</summary>
         /// <param name="connectionHandle">Connection handle</param>
         /// <param name="attributeHandle">Attribute handle</param>
