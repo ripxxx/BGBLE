@@ -213,7 +213,7 @@ namespace BGBLE
         /// <param name="data">Data to write</param>
         /// <param name="count">Data lemgth</param>
         /// <returns>Error code, 0x0000 if success.</returns>
-        public ushort WriteWithoutAcknowledgment(ushort attributeHandle, byte[] data, byte count)
+        public ushort WriteWithoutAcknowledgment(byte[] data, byte count)
         {
             if (_isWriteWithouAcknowledgmentSupported)
             {
