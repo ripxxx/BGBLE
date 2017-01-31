@@ -227,7 +227,7 @@ namespace BGBLE.BGAPI
         /// <seealso>Bluetooth_Smart_Software-BLE-1.3-API-RM.pdf(5.1 Attribute Client)</seealso>
         public ushort FindByTypeValue(byte connectionHandle, ushort attributeUUID, ushort startHandle, ushort endHandle, byte[] data, byte count)
         {
-            byte payloadLength = (byte)((count > 19) ? 19 : count); //Data Length
+            byte payloadLength = (byte)((count > 20) ? 20 : count); //Data Length
             payloadLength += 1;                                     //Byte for data length - count
             payloadLength += 7;                                     //sizeof(connectionHandle) + sizeof(attributeHandle) + sizeof(offset)
 
@@ -528,7 +528,7 @@ namespace BGBLE.BGAPI
         /// <seealso>Bluetooth_Smart_Software-BLE-1.3-API-RM.pdf(5.1 Attribute Client)</seealso>
         public ushort WriteAttributeByHandle(byte connectionHandle, ushort attributeHandle, byte[] data, byte count)
         {
-            byte payloadLength = (byte)((count > 19) ? 19 : count); //Data Length
+            byte payloadLength = (byte)((count > 20) ? 20 : count); //Data Length
             payloadLength += 1;                                     //Byte for data length - count
             payloadLength += 3;                                     //sizeof(connectionHandle) + sizeof(attributeHandle)
 
@@ -566,7 +566,7 @@ namespace BGBLE.BGAPI
         public ushort WriteAttributeByHandleWithAcknowledgment(byte connectionHandle, ushort attributeHandle, byte[] data, byte count)
         {
 
-            byte payloadLength = (byte)((count > 19) ? 19 : count); //Data Length
+            byte payloadLength = (byte)((count > 20) ? 20 : count); //Data Length
             payloadLength += 1;                                     //Byte for data length - count
             payloadLength += 3;                                     //sizeof(connectionHandle) + sizeof(attributeHandle)
 
