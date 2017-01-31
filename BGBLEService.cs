@@ -164,5 +164,15 @@ namespace BGBLE
         {
             return _device.WriteAttributeValue(attributeHandle, data, count, doNotWaiteCompletition);
         }
+
+        // <summary>Writes data to attribute without acknowledgment procedure.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="data">Data to write</param>
+        /// <param name="count">Data lemgth</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WriteAttributeValueWithoutAcknowledgment(ushort attributeHandle, byte[] data, byte count)
+        {
+            return _device.WriteAttributeValueWithoutAcknowledgment(attributeHandle, data, count);
+        }
     }
 }

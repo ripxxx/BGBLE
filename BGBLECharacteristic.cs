@@ -209,6 +209,19 @@ namespace BGBLE
             throw new BGAPIException(0xFF96, "BGBLECharacteristic write operation not supported");
         }
 
+        // <summary>Writes data to attribute without acknowledgment procedure.</summary>
+        /// <param name="data">Data to write</param>
+        /// <param name="count">Data lemgth</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WriteWithoutAcknowledgment(ushort attributeHandle, byte[] data, byte count)
+        {
+            if (_isWriteWithouAcknowledgmentSupported)
+            {
+                return _service.WriteAttributeValueWithoutAcknowledgment(_valueAttributeHandle, data, count);
+            }
+            throw new BGAPIException(0xFF96, "BGBLECharacteristic write without acknowledgment operation not supported");
+        }
+
         // OVERRIDED METHODS
         /// <summary>Returns string with BLE device characteristic details.</summary>
         public override string ToString()

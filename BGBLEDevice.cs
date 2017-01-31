@@ -681,6 +681,16 @@ namespace BGBLE
             return result;
         }
 
+        // <summary>Starts attribute value write without acknowledgment procedure.</summary>
+        /// <param name="attributeHandle">Attribute handle</param>
+        /// <param name="data">Data to write</param>
+        /// <param name="count">Data lemgth</param>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort WriteAttributeValueWithoutAcknowledgment(ushort attributeHandle, byte[] data, byte count)
+        {
+            return _central.WriteAttributeValueWithoutAcknowledgment(_connectionHandle, attributeHandle, data, count);
+        }
+
         // OVERRIDED METHODS
         /// <summary>Returns string with BLE device details.</summary>
         public override string ToString()
