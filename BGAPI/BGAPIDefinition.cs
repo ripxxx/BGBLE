@@ -9,7 +9,7 @@ using System.Collections.Generic;
 namespace BGBLE.BGAPI
 {
     /// <summary>BG API Exception.</summary>
-    class BGAPIException : Exception
+    public class BGAPIException : Exception
     {
         private ushort _errorCode;
         private string _errorGroup;
