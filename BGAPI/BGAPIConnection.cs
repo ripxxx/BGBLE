@@ -252,7 +252,7 @@ namespace BGBLE.BGAPI
                                             {
                                                 //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData.Count);
                                                 BGAPIConnectionEventData t_eventData = _eventsData[t_threadId].First();
-                                                if (_eventHandlers.ContainsKey(t_threadId))
+                                                if ((t_eventData.payload != null) && _eventHandlers.ContainsKey(t_threadId))
                                                 {
                                                     _eventHandlers[t_threadId].Invoke(t_eventData);
                                                 }

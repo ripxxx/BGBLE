@@ -213,7 +213,9 @@ namespace BGBLE.BGAPI
                                 {
                                     //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData.Count);
                                     BGAPIAttributeClientCommandClassAttributeValueEventArgs t_eventArgs = _eventsArgs[t_threadId].First();
-                                    AttributeValue?.Invoke(this, t_eventArgs);
+                                    if (t_eventArgs != null) {
+                                        AttributeValue?.Invoke(this, t_eventArgs);
+                                    }
 
                                     _eventsArgs[t_threadId].RemoveAt(0);
                                 }
