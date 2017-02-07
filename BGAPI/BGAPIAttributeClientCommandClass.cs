@@ -5,6 +5,8 @@
 
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace BGBLE.BGAPI
 {
@@ -110,6 +112,9 @@ namespace BGBLE.BGAPI
     /// <seealso>Bluetooth_Smart_Software-BLE-1.3-API-RM.pdf(5.1 Attribute Client)</seealso>
     class BGAPIAttributeClientCommandClass : BGAPICommandClass
     {
+        private Dictionary<byte, List<BGAPIAttributeClientCommandClassAttributeValueEventArgs>> _eventsArgs;
+        private Dictionary<byte, Thread> _eventsThreads;
+
         public const byte CLASS_ID = BGAPIDefinition.CCID_ATTRIBUTE_CLIENT;
 
         public event BGAPIAttributeClientCommandClassAttributeValueEventHandler AttributeValue;
@@ -119,23 +124,15 @@ namespace BGBLE.BGAPI
         public event BGAPIAttributeClientCommandClassProcedureCompleteEventHandler ProcedureCompleted;
         public event BGAPIAttributeClientCommandClassReadMultipleEventHandler ReadMultiple;
 
-        public BGAPIAttributeClientCommandClass(BGAPIConnection connection) : base(connection) {
-            _connection.RegisterEventHandlerForCommandClass(CLASS_ID, (BGAPIConnectionEventData eventData) => {
+        public BGAPIAttributeClientCommandClass(BGAPIConnection connection) : base(connection)
+        {
+            _eventsArgs = new Dictionary<byte, List<BGAPIAttributeClientCommandClassAttributeValueEventArgs>>();
+            _eventsThreads = new Dictionary<byte, Thread>();
+
+            _connection.RegisterEventHandlerForCommandClass(CLASS_ID, (BGAPIConnectionEventData eventData) =>
+            {
                 switch (eventData.header.commandId)
                 {
-                    case BGAPIDefinition.ATTRIBUTE_CLIENT_EVENT_ATTRIBUTE_VALUE:
-                        if (eventData.header.payloadLength >= 5)
-                        {
-                            BGAPIAttributeClientCommandClassAttributeValueEventArgs eventArgs = new BGAPIAttributeClientCommandClassAttributeValueEventArgs();
-                            eventArgs.ConnectionHandle = eventData.payload[0];
-                            eventArgs.AttributeHandle = BitConverter.ToUInt16(eventData.payload.Skip(1).Take(2).ToArray(), 0);
-                            eventArgs.AttributeValueType = (BGAPIAttributeValueType)eventData.payload[3];
-                            byte _count = eventData.payload[4];
-                            eventArgs.AttributeDataLength = _count;
-                            eventArgs.AttributeData = eventData.payload.Skip(5).Take(_count).ToArray();
-                            AttributeValue?.Invoke(this, eventArgs);
-                        }
-                        break;
                     case BGAPIDefinition.ATTRIBUTE_CLIENT_EVENT_FIND_INFORMATION_FOUND:
                         if (eventData.header.payloadLength >= 4)
                         {
@@ -193,6 +190,60 @@ namespace BGBLE.BGAPI
                         break;
                     default:
                         break;
+                }
+            });
+            _connection.RegisterEventHandlerForEvent(CLASS_ID, BGAPIDefinition.ATTRIBUTE_CLIENT_EVENT_ATTRIBUTE_VALUE, (BGAPIConnectionEventData eventData) => {
+                if (eventData.header.payloadLength >= 5)
+                {
+                    BGAPIAttributeValueType attributeValueType = (BGAPIAttributeValueType)eventData.payload[3];
+
+                    if (!_eventsArgs.ContainsKey((byte)attributeValueType))
+                    {
+                        _eventsArgs[(byte)attributeValueType] = new List<BGAPIAttributeClientCommandClassAttributeValueEventArgs>();
+                    }
+
+                    if (!_eventsThreads.ContainsKey((byte)attributeValueType))
+                    {
+                        Thread eventThread = new Thread(() => {
+                            byte t_threadId = (byte)attributeValueType;
+
+                            while (_connection.IsOpen)
+                            {
+                                if (_eventsArgs[t_threadId].Count > 0)
+                                {
+                                    //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData.Count);
+                                    BGAPIAttributeClientCommandClassAttributeValueEventArgs t_eventArgs = _eventsArgs[t_threadId].First();
+                                    AttributeValue?.Invoke(this, t_eventArgs);
+
+                                    _eventsArgs[t_threadId].RemoveAt(0);
+                                }
+                                Thread.Sleep(2);
+                            }
+                        });
+                        _eventsThreads[(byte)attributeValueType] = eventThread;
+                        eventThread.Name = "EventThread_AttributeValue_" + attributeValueType;
+                        eventThread.Start();
+                    }
+
+                    BGAPIAttributeClientCommandClassAttributeValueEventArgs eventArgs = new BGAPIAttributeClientCommandClassAttributeValueEventArgs();
+                    eventArgs.ConnectionHandle = eventData.payload[0];
+                    eventArgs.AttributeHandle = BitConverter.ToUInt16(eventData.payload.Skip(1).Take(2).ToArray(), 0);
+                    eventArgs.AttributeValueType = attributeValueType;
+                    byte _count = eventData.payload[4];
+                    eventArgs.AttributeDataLength = _count;
+                    eventArgs.AttributeData = eventData.payload.Skip(5).Take(_count).ToArray();
+
+                    _eventsArgs[(byte)attributeValueType].Add(eventArgs);
+
+
+                    /*BGAPIAttributeClientCommandClassAttributeValueEventArgs eventArgs = new BGAPIAttributeClientCommandClassAttributeValueEventArgs();
+                    eventArgs.ConnectionHandle = eventData.payload[0];
+                    eventArgs.AttributeHandle = BitConverter.ToUInt16(eventData.payload.Skip(1).Take(2).ToArray(), 0);
+                    eventArgs.AttributeValueType = attributeValueType;
+                    byte _count = eventData.payload[4];
+                    eventArgs.AttributeDataLength = _count;
+                    eventArgs.AttributeData = eventData.payload.Skip(5).Take(_count).ToArray();
+                    AttributeValue?.Invoke(this, eventArgs);*/
                 }
             });
         }

@@ -71,9 +71,8 @@ namespace BGBLE.BGAPI
     /// <summary>This class serves connection with BLED112 device. To get instance of the class call class method Connection().</summary>
     public class BGAPIConnection
     {
-        private Dictionary<byte, BGAPIEventReceivedHandler> _eventHandlers;
-        private List<BGAPIConnectionEventData> _eventsData;
-        private Dictionary<ushort, List<ulong>> _eventsDataCount;
+        private Dictionary<ushort, BGAPIEventReceivedHandler> _eventHandlers;
+        private Dictionary<ushort, List<BGAPIConnectionEventData>> _eventsData;
         private Dictionary<ushort, Thread> _eventsThreads;
         private bool _isWatingResponse = false;
         private BGAPIConnectionResponseData _responseData;
@@ -84,9 +83,8 @@ namespace BGBLE.BGAPI
 
         private BGAPIConnection(SerialPort serialPort = null)
         {
-            _eventHandlers = new Dictionary<byte, BGAPIEventReceivedHandler>();
-            _eventsData = new List<BGAPIConnectionEventData>();
-            _eventsDataCount = new Dictionary<ushort, List<ulong>>();
+            _eventHandlers = new Dictionary<ushort, BGAPIEventReceivedHandler>();
+            _eventsData = new Dictionary<ushort, List<BGAPIConnectionEventData>>();
             _eventsThreads = new Dictionary<ushort, Thread>();
             
 
@@ -125,6 +123,14 @@ namespace BGBLE.BGAPI
         {
             Close();
         }
+
+        //PROPRTIES
+        /// <summary>Is connection open.</summary>
+        public bool IsOpen
+        {
+            get { return _serialPort.IsOpen; }
+        }
+        //PROPRTIES
 
         // EVENT HANDLERS
         /// <summary>Event handler for DataReceived event of SerialPort.</summary>
@@ -219,47 +225,48 @@ namespace BGBLE.BGAPI
                             }
                             if (header.isEvent)
                             {
-                                if (_eventHandlers.ContainsKey(header.commandClassId)) {
-                                    ushort threadId = (ushort)((header.commandClassId << 8) + header.commandId);
-                                    if (!_eventsDataCount.ContainsKey(threadId))
+                                ushort threadId = (ushort)((header.commandClassId << 8) + header.commandId);
+                                if (!_eventHandlers.ContainsKey(threadId))
+                                {
+                                    threadId = (ushort)((header.commandClassId << 8) + 0xFF);
+                                    if (!_eventHandlers.ContainsKey(threadId))
                                     {
-                                        _eventsDataCount[threadId] = new List<ulong>();
+                                        continue;
                                     }
-                                    if (!_eventsThreads.ContainsKey(threadId))
-                                    {
-                                        Thread eventThread = new Thread(() => {
-                                            byte t_commandClassId = header.commandClassId;
-                                            ushort t_threadId = threadId;
-                                            while (_serialPort.IsOpen)
-                                            {
-                                                if ((_eventsDataCount[t_threadId].Count > 0) && (_eventsData.Count > 0))
-                                                {
-                                                    //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData.Count);
-                                                    BGAPIConnectionEventData t_eventData = _eventsData.First();
-                                                    if (t_eventData.type != t_threadId)
-                                                    {
-                                                        continue;
-                                                    }
-
-                                                    if (_eventHandlers.ContainsKey(t_commandClassId))
-                                                    {
-                                                        _eventHandlers[header.commandClassId].Invoke(t_eventData);
-                                                    }
-
-                                                    _eventsData.RemoveAt(0);
-                                                    _eventsDataCount[t_threadId].RemoveAt(0);
-                                                }
-                                                Thread.Sleep(2);
-                                            }
-                                        });
-                                        _eventsThreads[threadId] = eventThread;
-                                        eventThread.Name = "EventThread_" + threadId.ToString("X");
-                                        eventThread.Start();
-
-                                    }
-                                    _eventsData.Add(new BGAPIConnectionEventData(threadId, header, data.Take(payloadLength).ToArray()));
-                                    _eventsDataCount[threadId].Add((ulong)(_eventsDataCount[threadId].Count + 1));
                                 }
+                                
+                                if (!_eventsData.ContainsKey(threadId))
+                                {
+                                    _eventsData[threadId] = new List<BGAPIConnectionEventData>();
+                                }
+
+                                if (!_eventsThreads.ContainsKey(threadId))
+                                {
+                                    Thread eventThread = new Thread(() => {
+                                        byte t_commandClassId = header.commandClassId;
+                                        ushort t_threadId = threadId;
+
+                                        while (_serialPort.IsOpen)
+                                        {
+                                            if (_eventsData[t_threadId].Count > 0)
+                                            {
+                                                //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData.Count);
+                                                BGAPIConnectionEventData t_eventData = _eventsData[t_threadId].First();
+                                                if (_eventHandlers.ContainsKey(t_threadId))
+                                                {
+                                                    _eventHandlers[t_threadId].Invoke(t_eventData);
+                                                }
+
+                                                _eventsData[t_threadId].RemoveAt(0);
+                                            }
+                                            Thread.Sleep(2);
+                                        }
+                                    });
+                                    _eventsThreads[threadId] = eventThread;
+                                    eventThread.Name = "EventThread_" + threadId.ToString("X");
+                                    eventThread.Start();
+                                }
+                                _eventsData[threadId].Add(new BGAPIConnectionEventData(threadId, header, data.Take(payloadLength).ToArray()));
                             }
                             else if (header.isCommandOrResponse)
                             {
@@ -287,7 +294,17 @@ namespace BGBLE.BGAPI
         /// <param name="eventHandler">Event Handler which will be called when event packet(of command class) received</param>
         public void RegisterEventHandlerForCommandClass(byte commandClassId, BGAPIEventReceivedHandler eventHandler)
         {
-            _eventHandlers[commandClassId] = eventHandler;
+            RegisterEventHandlerForEvent(commandClassId, 0xFF, eventHandler);
+        }
+
+        /// <summary>Registering event handler for event.</summary>
+        /// <param name="commandClassId">Id of BG API command class</param>
+        /// <param name="eventId">Id of BG API event in corresponding command class</param>
+        /// <param name="eventHandler">Event Handler which will be called when event packet(of command class) received</param>
+        public void RegisterEventHandlerForEvent(byte commandClassId, byte eventId, BGAPIEventReceivedHandler eventHandler)
+        {
+            ushort id = (ushort)((commandClassId << 8) + eventId);
+            _eventHandlers[id] = eventHandler;
         }
 
         /// <summary>Sends data packet to BLED112 device and waits for response.</summary>
