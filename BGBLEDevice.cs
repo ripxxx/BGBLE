@@ -12,6 +12,18 @@ using BGBLE.BGAPI;
 
 namespace BGBLE
 {
+    public enum BGAPIDeviceState : byte
+    {
+        /// <summary>Device is alive.</summary>
+        Alive = 0,
+        /// <summary>Lost for the first checking period.</summary>
+        TemporaryLost = 1,
+        /// <summary>Lost for the second checking period(Unavailable).</summary>
+        Unavailable = 2,
+        /// <summary>Totally lost.</summary>
+        TotallyLost = 3,
+    }
+
     public struct BGBLECharacteristicData
     {
         public ulong count;
@@ -56,6 +68,8 @@ namespace BGBLE
         private BGAPIBLEDeviceConnectionStatus _connectionStatus = new BGAPIBLEDeviceConnectionStatus(false, false, false, false);
         private ulong _discoveryPacketsReceived = 0;
         private BGAPIBLEDeviceInfo _info;
+        private DateTime _lastUpdateDateTime;
+        private BGAPIDeviceState _state;
         private System.Timers.Timer _timer;
 
         private Dictionary<ushort, string> _descriptorsByAttributeHandle = new Dictionary<ushort, string>();
@@ -76,6 +90,8 @@ namespace BGBLE
         {
             _central = central;
             _info = info;
+            _lastUpdateDateTime = DateTime.Now;
+            _state = BGAPIDeviceState.Alive;
 
             _timer = new System.Timers.Timer(5000);
             _timer.Elapsed += TimeoutReached;
@@ -134,6 +150,12 @@ namespace BGBLE
                 }
                 return _servicesByUUID;
             }
+        }
+
+        /// <summary>Device state.</summary>
+        public BGAPIDeviceState State
+        {
+            get { return _state; }
         }
         //PROPRTIES
 
@@ -596,6 +618,9 @@ namespace BGBLE
         /// <param name="info">Strucuture with device information from advertisment or scan packet</param>
         public void Update(BGAPIBLEDeviceInfo info)
         {
+            _lastUpdateDateTime = DateTime.Now;
+            _state = BGAPIDeviceState.Alive;
+
             BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
             eventArgs.Device = this;
 
@@ -641,6 +666,32 @@ namespace BGBLE
             }
 
             Updated?.Invoke(this, eventArgs);
+        }
+
+        /// <summary>Updates device state based on last update time.</summary>
+        /// <param name="checkingInterver">Interval used by central to update state</param>
+        public void UpdateState(double checkingInterver)
+        {
+            if (_state != BGAPIDeviceState.TotallyLost)
+            {
+                var now = DateTime.Now;
+                var timeDif = now.Subtract(_lastUpdateDateTime);
+                if (timeDif.TotalMilliseconds > checkingInterver)
+                {
+                    if (_state == BGAPIDeviceState.Alive)
+                    {
+                        _state = BGAPIDeviceState.TemporaryLost;
+                    }
+                    else if (_state == BGAPIDeviceState.TemporaryLost)
+                    {
+                        _state = BGAPIDeviceState.Unavailable;
+                    }
+                    else
+                    {
+                        _state = BGAPIDeviceState.TotallyLost;
+                    }
+                }
+            }
         }
 
         // <summary>Writes data to attribute.</summary>

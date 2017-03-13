@@ -26,6 +26,8 @@ namespace BGBLE
     /// <summary>This class implements BLE central which using BG API.</summary>
     public class BGBLECentral
     {
+        private const double STATE_UPDATE_INTERVAL = 5000;
+
         private string _address;
         private BGAPIConnection _connection;
         private Dictionary<string, BGBLEDevice> _devicesByAddress;
@@ -37,8 +39,12 @@ namespace BGBLE
         private BGAPIGAPCommandClass _gapCommandClass;
         private BGAPISystemCommandClass _systemCommandClass;
 
+        private System.Timers.Timer _timer;
+
         /// <summary>Fires when device is found.</summary>
         public event BGBLEDeviceInfoReceivedEventHandler DeviceFound;
+        /// <summary>Fires when device was lost.</summary>
+        public event BGBLEDeviceInfoReceivedEventHandler DeviceLost;
 
         public BGBLECentral(SerialPort serialPort = null)
         {
@@ -83,6 +89,9 @@ namespace BGBLE
             _connectionCommandClass.StatusChanged += ConnectionCommandClassStatusChanged;
             _connectionCommandClass.Disconnected += ConnectionCommandClassDisconnected;
             _gapCommandClass.DeviceFound += GAPCommandClassDeviceFound;
+
+            _timer = new System.Timers.Timer(STATE_UPDATE_INTERVAL);
+            _timer.Elapsed += TimeoutReached;
         }
 
         ~BGBLECentral()
@@ -206,11 +215,33 @@ namespace BGBLE
                 _devicesByAddress[e.DeviceInfo.address].Update(e.DeviceInfo);
             }
         }
+
+        /// <summary>Event handler for Elapsed event of System.Timers.Timer.</summary>
+        /// <param name="sender">Instace of System.Timers.Timer class which generated the event</param>
+        /// <param name="e">EventArgs</param>
+        private void TimeoutReached(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            foreach(KeyValuePair<string, BGBLEDevice> entry in _devicesByAddress)
+            {
+                var device = entry.Value;
+                var deviceLastState = device.State;
+                device.UpdateState(STATE_UPDATE_INTERVAL);
+                if ((device.State != BGAPIDeviceState.Alive) && (device.State != deviceLastState))
+                {
+                    BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
+                    eventArgs.Device = device;
+                    eventArgs.RSSI = -128;
+                    DeviceLost?.Invoke(this, eventArgs);
+                }
+            }
+        }
         // EVENT HANDLERS
 
         /// <summary>Closes connection.</summary>
         public void Close()
         {
+            _timer.Stop();
+            _timer.Dispose();
             _connection?.Close();
         }
 
@@ -222,6 +253,7 @@ namespace BGBLE
         {
             if (_devicesByAddress.ContainsKey(address))
             {
+                _timer.Stop();
                 try
                 {
                     BGAPIConnectionResult result = _gapCommandClass.ConnectDirect(address, addressType);
@@ -281,6 +313,7 @@ namespace BGBLE
         /// <returns>Error code, 0x0000 if success.</returns>
         public ushort FindDevices()
         {
+            _timer.Start();
             return _gapCommandClass.Discover(BGAPIDiscoverMode.Observation);
         }
 
@@ -308,6 +341,14 @@ namespace BGBLE
         public ushort ReadAttributeLongValue(byte connectionHandle, ushort attributeHandle)
         {
             return _attributeClientCommandClass.ReadAttributeByHandleLong(connectionHandle, attributeHandle);
+        }
+
+        /// <summary>Stops device discovery procedure.</summary>
+        /// <returns>Error code, 0x0000 if success.</returns>
+        public ushort StopScanning()
+        {
+            _timer.Stop();
+            return _gapCommandClass.EndProcedure();
         }
 
         // <summary>Starts attribute value prepare write procedure on connected device. Procedure completed event will be generated.</summary>
@@ -350,13 +391,6 @@ namespace BGBLE
         public ushort WritePreparedAttributeValue(byte connectionHandle, bool commit = true)
         {
             return _attributeClientCommandClass.ExecuteWrite(connectionHandle, commit);
-        }
-
-        /// <summary>Stops device discovery procedure.</summary>
-        /// <returns>Error code, 0x0000 if success.</returns>
-        public ushort StopScanning()
-        {
-            return _gapCommandClass.EndProcedure();
         }
 
         // OVERRIDED METHODS
