@@ -212,7 +212,17 @@ namespace BGBLE
             }
             else
             {
-                _devicesByAddress[e.DeviceInfo.address].Update(e.DeviceInfo);
+                if (_devicesByAddress[e.DeviceInfo.address].State == BGAPIDeviceState.TotallyLost) {
+                    _devicesByAddress[e.DeviceInfo.address].Update(e.DeviceInfo, true);
+                    BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
+                    eventArgs.Device = _devicesByAddress[e.DeviceInfo.address];
+                    eventArgs.RSSI = e.DeviceInfo.rssi;
+                    DeviceFound?.Invoke(this, eventArgs);
+                }
+                else
+                {
+                    _devicesByAddress[e.DeviceInfo.address].Update(e.DeviceInfo);
+                }
             }
         }
 

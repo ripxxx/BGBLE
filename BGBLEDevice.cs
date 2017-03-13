@@ -616,7 +616,7 @@ namespace BGBLE
 
         /// <summary>Updates device information.</summary>
         /// <param name="info">Strucuture with device information from advertisment or scan packet</param>
-        public void Update(BGAPIBLEDeviceInfo info)
+        public void Update(BGAPIBLEDeviceInfo info, bool silent = false)
         {
             _lastUpdateDateTime = DateTime.Now;
             _state = BGAPIDeviceState.Alive;
@@ -665,7 +665,9 @@ namespace BGBLE
                 }
             }
 
-            Updated?.Invoke(this, eventArgs);
+            if (!silent) {
+                Updated?.Invoke(this, eventArgs);
+            }
         }
 
         /// <summary>Updates device state based on last update time.</summary>
@@ -689,6 +691,10 @@ namespace BGBLE
                     else
                     {
                         _state = BGAPIDeviceState.TotallyLost;
+                        DescriptorsFound = null;
+                        DeviceDisconnected = null;
+                        RSSIUpdated = null;
+                        Updated = null;
                     }
                 }
             }
