@@ -61,7 +61,7 @@ namespace BGBLE
             //CHECKING DEVICE
             try
             {
-                _systemCommandClass.Hello();
+                Hello();
 
                 //GETTING BLED112 MAC ADDRESS
                 _address = _systemCommandClass.GetAddress();
@@ -333,6 +333,13 @@ namespace BGBLE
         public sbyte GetRSSIOfConnection(byte connectionHandle)
         {
             return _connectionCommandClass.GetRSSI(connectionHandle);
+        }
+
+        /// <summary>Sends hello to BLED112.</summary>
+        /// <returns>Return TRUE if response received.</returns>
+        public bool Hello()
+        {
+            return _systemCommandClass.Hello();
         }
 
         // <summary>Starts attribute value read procedure on connected device.</summary>

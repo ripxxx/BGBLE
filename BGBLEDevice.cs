@@ -187,6 +187,7 @@ namespace BGBLE
                 if (_isTimeoutReached)
                 {
                     _isTimeoutReached = false;
+                    _central.Hello();
                     throw new BGAPIException(0xFF94, new TimeoutException());
                 }
             }
@@ -271,6 +272,7 @@ namespace BGBLE
             if (_isTimeoutReached)
             {
                 _isTimeoutReached = false;
+                _central.Hello();
                 throw new BGAPIException(0xFF94, new TimeoutException());
             }
             _timer.Stop();
