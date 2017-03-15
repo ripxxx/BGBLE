@@ -187,7 +187,7 @@ namespace BGBLE
                 if (_isTimeoutReached)
                 {
                     _isTimeoutReached = false;
-                    _central.Hello();
+                    _central.StopScanning();
                     throw new BGAPIException(0xFF94, new TimeoutException());
                 }
             }

@@ -58,6 +58,9 @@ namespace BGBLE
             _gapCommandClass = new BGAPIGAPCommandClass(_connection);
             _systemCommandClass = new BGAPISystemCommandClass(_connection);
 
+            _timer = new System.Timers.Timer(STATE_UPDATE_INTERVAL);
+            _timer.Elapsed += TimeoutReached;
+
             //CHECKING DEVICE
             try
             {
@@ -89,9 +92,6 @@ namespace BGBLE
             _connectionCommandClass.StatusChanged += ConnectionCommandClassStatusChanged;
             _connectionCommandClass.Disconnected += ConnectionCommandClassDisconnected;
             _gapCommandClass.DeviceFound += GAPCommandClassDeviceFound;
-
-            _timer = new System.Timers.Timer(STATE_UPDATE_INTERVAL);
-            _timer.Elapsed += TimeoutReached;
         }
 
         ~BGBLECentral()
