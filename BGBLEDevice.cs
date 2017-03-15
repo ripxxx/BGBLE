@@ -168,6 +168,7 @@ namespace BGBLE
         {
             _timer.Stop();
             _isTimeoutReached = true;
+            _state = BGAPIDeviceState.Unavailable;
         }
         // EVENT HANDLERS
 
