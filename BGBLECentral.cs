@@ -250,8 +250,8 @@ namespace BGBLE
         /// <summary>Closes connection.</summary>
         public void Close()
         {
-            _timer.Stop();
-            _timer.Dispose();
+            _timer?.Stop();
+            _timer?.Dispose();
             _connection?.Close();
         }
 
