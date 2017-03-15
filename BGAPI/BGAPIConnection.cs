@@ -74,6 +74,7 @@ namespace BGBLE.BGAPI
         private Dictionary<ushort, BGAPIEventReceivedHandler> _eventHandlers;
         private Dictionary<ushort, List<BGAPIConnectionEventData>> _eventsData;
         private Dictionary<ushort, Thread> _eventsThreads;
+        private bool _isTimeoutReached = false;
         private bool _isWatingResponse = false;
         private BGAPIConnectionResponseData _responseData;
         private SerialPort _serialPort;
@@ -156,7 +157,7 @@ namespace BGBLE.BGAPI
         private void TimeoutReached(object sender, System.Timers.ElapsedEventArgs e)
         {
             _timer.Stop();
-            throw new BGAPIException(0xFF02, new TimeoutException());
+            _isTimeoutReached = true;
         }
         // EVENT HANDLERS
 
@@ -340,6 +341,12 @@ namespace BGBLE.BGAPI
             _isWatingResponse = true;
             while (_isWatingResponse)
             {
+                if (_isTimeoutReached)
+                {
+                    _isTimeoutReached = false;
+                    throw new BGAPIException(0xFF02, new TimeoutException());
+                }
+
                 if (_responseData.isReady)
                 {
                     _timer.Stop();

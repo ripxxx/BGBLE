@@ -68,6 +68,7 @@ namespace BGBLE
         private BGAPIBLEDeviceConnectionStatus _connectionStatus = new BGAPIBLEDeviceConnectionStatus(false, false, false, false);
         private ulong _discoveryPacketsReceived = 0;
         private BGAPIBLEDeviceInfo _info;
+        private bool _isTimeoutReached = false;
         private DateTime _lastUpdateDateTime;
         private BGAPIDeviceState _state;
         private System.Timers.Timer _timer;
@@ -166,7 +167,7 @@ namespace BGBLE
         private void TimeoutReached(object sender, System.Timers.ElapsedEventArgs e)
         {
             _timer.Stop();
-            throw new BGAPIException(0xFF94, new TimeoutException());
+            _isTimeoutReached = true;
         }
         // EVENT HANDLERS
 
@@ -180,7 +181,14 @@ namespace BGBLE
             {
                 return result;
             }
-            while (!_commandComletition.isDone);
+            while (!_commandComletition.isDone)
+            {
+                if (_isTimeoutReached)
+                {
+                    _isTimeoutReached = false;
+                    throw new BGAPIException(0xFF94, new TimeoutException());
+                }
+            }
             _commandComletition.isDone = false;
             if (finish != null)
             {
@@ -261,6 +269,11 @@ namespace BGBLE
                 _connectionHandle = _central.Connect(Address, AddressType);
                 _timer.Start();
                 while (!_connectionStatus.isCompleted && _timer.Enabled) ;
+                if (_isTimeoutReached)
+                {
+                    _isTimeoutReached = false;
+                    throw new BGAPIException(0xFF94, new TimeoutException());
+                }
                 _timer.Stop();
                 //STARTING FIND DESCRIPTORS PROCESS
                 _timer.Start();
