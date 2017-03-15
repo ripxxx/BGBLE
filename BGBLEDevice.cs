@@ -264,34 +264,27 @@ namespace BGBLE
         /// <returns>TRUE if succesfully connected.</returns>
         public bool Connect()
         {
-            try
+            _connectionHandle = _central.Connect(Address, AddressType);
+            _timer.Start();
+            while (!_connectionStatus.isCompleted && _timer.Enabled) ;
+            if (_isTimeoutReached)
             {
-                _connectionHandle = _central.Connect(Address, AddressType);
-                _timer.Start();
-                while (!_connectionStatus.isCompleted && _timer.Enabled) ;
-                if (_isTimeoutReached)
-                {
-                    _isTimeoutReached = false;
-                    throw new BGAPIException(0xFF94, new TimeoutException());
-                }
+                _isTimeoutReached = false;
+                throw new BGAPIException(0xFF94, new TimeoutException());
+            }
+            _timer.Stop();
+            //STARTING FIND DESCRIPTORS PROCESS
+            _timer.Start();
+            ushort _result = WaitForCompletition(() => {
+                return _central.FindDescriptors(_connectionHandle);
+            }, (ushort attributeHandle, ushort result) => {
                 _timer.Stop();
-                //STARTING FIND DESCRIPTORS PROCESS
-                _timer.Start();
-                ushort _result = WaitForCompletition(() => {
-                    return _central.FindDescriptors(_connectionHandle);
-                }, (ushort attributeHandle, ushort result) => {
-                    _timer.Stop();
-                    BGBLEDeviceDescriptorsFoundEventArgs eventArgs = new BGBLEDeviceDescriptorsFoundEventArgs();
-                    eventArgs.Descriptors = _descriptorsByAttributeHandle;
-                    DescriptorsFound?.Invoke(this, eventArgs);
-                    return result;
-                });
-                return true;
-            }
-            catch (BGAPIException ex)
-            {
-                return false;
-            }
+                BGBLEDeviceDescriptorsFoundEventArgs eventArgs = new BGBLEDeviceDescriptorsFoundEventArgs();
+                eventArgs.Descriptors = _descriptorsByAttributeHandle;
+                DescriptorsFound?.Invoke(this, eventArgs);
+                return result;
+            });
+            return (_result == 0);
         }
 
         /// <summary>Sets connection status.</summary>
@@ -333,19 +326,12 @@ namespace BGBLE
         /// <returns>TRUE if succesfully disconnected.</returns>
         public bool Disconnect()
         {
-            try
+            ushort error = _central.Disconnect(_connectionHandle);
+            if (error == 0)
             {
-                ushort error = _central.Disconnect(_connectionHandle);
-                if (error == 0)
-                {
-                    _timer.Start();
-                    while (_connectionStatus.isConnected) ;
-                    return true;
-                }
-            }
-            catch (BGAPIException ex)
-            {
-                return false;
+                _timer.Start();
+                while (_connectionStatus.isConnected) ;
+                return true;
             }
             return false;
         }
