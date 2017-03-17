@@ -26,7 +26,7 @@ namespace BGBLE
     /// <summary>This class implements BLE central which using BG API.</summary>
     public class BGBLECentral
     {
-        private const double STATE_UPDATE_INTERVAL = 5000;
+        private const double STATE_UPDATE_INTERVAL = 2000;
 
         private string _address;
         private BGAPIConnection _connection;
