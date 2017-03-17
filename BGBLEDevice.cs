@@ -358,6 +358,8 @@ namespace BGBLE
                 _servicesByUUID = null;
             }
 
+            _state = BGAPIDeviceState.TotallyLost;
+
             BGBLEDeviceDisconnectedEventArgs eventArgs = new BGBLEDeviceDisconnectedEventArgs();
             eventArgs.ReasonCode = reasonCode;
             DeviceDisconnected?.Invoke(this, eventArgs);
