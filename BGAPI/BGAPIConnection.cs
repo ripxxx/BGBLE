@@ -213,7 +213,7 @@ namespace BGBLE.BGAPI
                 {
                     serialPort.Read(data, 0, headerSize);
                     BGAPIPacketHeader header = ExtractPacketHeader(data);
-                    //Console.WriteLine("2>>>>>> " + BitConverter.ToString(data, 0, headerSize));
+                    //RESPONSE
                     if (header.isBluetoothSmart)
                     {
                         ushort payloadLength = header.payloadLength;
@@ -243,15 +243,20 @@ namespace BGBLE.BGAPI
 
                                 if (!_eventsThreads.ContainsKey(threadId))
                                 {
+                                    var threadName = "EventThread_" + threadId.ToString("X");
                                     Thread eventThread = new Thread(() => {
                                         byte t_commandClassId = header.commandClassId;
                                         ushort t_threadId = threadId;
+                                        string t_threadName = threadName;
 
                                         while (_serialPort.IsOpen)
                                         {
                                             if (_eventsData[t_threadId].Count > 0)
                                             {
-                                                //Console.WriteLine("Thread " + t_threadId.ToString("x") + " queue length: " + _eventsData.Count);
+#if DEBUG
+                                                var _event = BGAPIDefinition.FindEventById(t_threadId);
+                                                BGBLEDebug.Tick("EVENT", 100, _event.ToString());
+#endif
                                                 BGAPIConnectionEventData t_eventData = _eventsData[t_threadId].First();
                                                 if ((t_eventData.payload != null) && _eventHandlers.ContainsKey(t_threadId))
                                                 {
@@ -264,7 +269,7 @@ namespace BGBLE.BGAPI
                                         }
                                     });
                                     _eventsThreads[threadId] = eventThread;
-                                    eventThread.Name = "EventThread_" + threadId.ToString("X");
+                                    eventThread.Name = threadName;
                                     eventThread.Start();
                                 }
                                 _eventsData[threadId].Add(new BGAPIConnectionEventData(threadId, header, data.Take(payloadLength).ToArray()));
@@ -273,6 +278,11 @@ namespace BGBLE.BGAPI
                             {
                                 _responseData.header = header;
                                 _responseData.payload = data.Take(payloadLength).ToArray();
+#if DEBUG
+                                var _command = BGAPIDefinition.FindCommandById(header.commandClassId, header.commandId);
+                                var _payload = BitConverter.ToString(_responseData.payload, 0, payloadLength).Replace("-", " ");
+                                BGBLEDebug.Log("RESPONSE", _command.ToString() + "  [" + _payload + "]");
+#endif
                                 _responseData.isReady = true;
                             }
                         }
@@ -335,7 +345,11 @@ namespace BGBLE.BGAPI
             requestData[3] = commandId;
 
             Array.Copy(payload, 0, requestData, 4, payloadLength);
-            //Console.WriteLine("1>>>>>> " + BitConverter.ToString(requestData, 0, requestDataLength));
+#if DEBUG
+            var _command = BGAPIDefinition.FindCommandById(commandClassId, commandId);
+            var _requestData = BitConverter.ToString(requestData, 0, requestDataLength).Replace("-", " ");
+            BGBLEDebug.Log("REQUEST", _command.ToString() + "  [" + _requestData + "]");
+#endif
             _timer.Start();
             _serialPort.Write(requestData, 0, requestDataLength);
             _isWatingResponse = true;
