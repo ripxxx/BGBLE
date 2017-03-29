@@ -344,6 +344,9 @@ namespace BGBLE
         public void Disconnected(ushort reasonCode)
         {
             _timer.Stop();
+
+            _state = BGAPIDeviceState.TotallyLost;
+
             _connectionStatus.isParametersChanged = false;
             _connectionStatus.isEncrypted = false;
             _connectionStatus.isCompleted = false;
@@ -357,8 +360,6 @@ namespace BGBLE
                 _servicesByUUID.Clear();
                 _servicesByUUID = null;
             }
-
-            _state = BGAPIDeviceState.TotallyLost;
 
             BGBLEDeviceDisconnectedEventArgs eventArgs = new BGBLEDeviceDisconnectedEventArgs();
             eventArgs.ReasonCode = reasonCode;
@@ -650,7 +651,10 @@ namespace BGBLE
                 _info.rssi = info.rssi;
                 
                 eventArgs.RSSI = info.rssi;
-                RSSIUpdated?.Invoke(this, eventArgs);
+                if (!silent)
+                {
+                    RSSIUpdated?.Invoke(this, eventArgs);
+                }
             }
             else
             {
