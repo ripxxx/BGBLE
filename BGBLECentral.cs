@@ -208,9 +208,6 @@ namespace BGBLE
                 BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
                 eventArgs.Device = device;
                 eventArgs.RSSI = e.DeviceInfo.rssi;
-#if DEBUG
-                BGBLEDebug.Log("\t\tDEVICE_FOUND", e.DeviceInfo.address + ", " + e.DeviceInfo.rssi);
-#endif
                 DeviceFound?.Invoke(this, eventArgs);
             }
             else
@@ -220,9 +217,6 @@ namespace BGBLE
                     BGBLEDeviceInfoReceivedEventArgs eventArgs = new BGBLEDeviceInfoReceivedEventArgs();
                     eventArgs.Device = _devicesByAddress[e.DeviceInfo.address];
                     eventArgs.RSSI = e.DeviceInfo.rssi;
-#if DEBUG
-                    BGBLEDebug.Log("\t\tDEVICE_REFOUND", e.DeviceInfo.address + ", " + e.DeviceInfo.rssi);
-#endif
                     DeviceFound?.Invoke(this, eventArgs);
                 }
                 else

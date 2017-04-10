@@ -253,10 +253,6 @@ namespace BGBLE.BGAPI
                                         {
                                             if (_eventsData[t_threadId].Count > 0)
                                             {
-#if DEBUG
-                                                var _event = BGAPIDefinition.FindEventById(t_threadId);
-                                                BGBLEDebug.Tick("EVENT", 100, _event.ToString());
-#endif
                                                 BGAPIConnectionEventData t_eventData = _eventsData[t_threadId].First();
                                                 if ((t_eventData.payload != null) && _eventHandlers.ContainsKey(t_threadId))
                                                 {
@@ -278,11 +274,6 @@ namespace BGBLE.BGAPI
                             {
                                 _responseData.header = header;
                                 _responseData.payload = data.Take(payloadLength).ToArray();
-#if DEBUG
-                                var _command = BGAPIDefinition.FindCommandById(header.commandClassId, header.commandId);
-                                var _payload = BitConverter.ToString(_responseData.payload, 0, payloadLength).Replace("-", " ");
-                                BGBLEDebug.Log("RESPONSE", _command.ToString() + "  [" + _payload + "]");
-#endif
                                 _responseData.isReady = true;
                             }
                         }
@@ -345,11 +336,7 @@ namespace BGBLE.BGAPI
             requestData[3] = commandId;
 
             Array.Copy(payload, 0, requestData, 4, payloadLength);
-#if DEBUG
-            var _command = BGAPIDefinition.FindCommandById(commandClassId, commandId);
-            var _requestData = BitConverter.ToString(requestData, 0, requestDataLength).Replace("-", " ");
-            BGBLEDebug.Log("REQUEST", _command.ToString() + "  [" + _requestData + "]");
-#endif
+
             _timer.Start();
             _serialPort.Write(requestData, 0, requestDataLength);
             _isWatingResponse = true;
