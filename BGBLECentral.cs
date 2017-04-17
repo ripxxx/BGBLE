@@ -14,7 +14,6 @@ using BGBLE.BGAPI;
 
 namespace BGBLE
 {
-
     public class BGBLEDeviceInfoReceivedEventArgs : EventArgs
     {
         public BGBLEDevice Device { get; set; }
@@ -32,6 +31,7 @@ namespace BGBLE
         private BGAPIConnection _connection;
         private Dictionary<string, BGBLEDevice> _devicesByAddress;
         private Dictionary<byte, BGBLEDevice> _devicesByConnectionHandle;
+        private BGAPIHardwareInfo _hardwareInfo = new BGAPIHardwareInfo();
         private byte _maxConnectionsAllowed = 0;
         //COMMANDS CLASSES
         private BGAPIAttributeClientCommandClass _attributeClientCommandClass;
@@ -71,6 +71,9 @@ namespace BGBLE
 
                 //GETTING MAX CONNECTIONS
                 _maxConnectionsAllowed = _systemCommandClass.GetConnections();
+
+                //GETTING HARDWARE INFORMATION
+                _hardwareInfo = _systemCommandClass.GetInfo();
 
                 //STOP DISCOVERY PROCESS, JUST IN CASE)
                 _gapCommandClass.EndProcedure();
@@ -251,7 +254,6 @@ namespace BGBLE
         public void Close()
         {
             _timer?.Stop();
-            _timer?.Dispose();
             _connection?.Close();
         }
 
@@ -342,6 +344,12 @@ namespace BGBLE
             return _systemCommandClass.Hello();
         }
 
+        /// <summary>Opens connection.</summary>
+        public void Open()
+        {
+            _connection?.Open();
+        }
+
         // <summary>Starts attribute value read procedure on connected device.</summary>
         /// <param name="connectionHandle">Connection handle</param>
         /// <param name="attributeHandle">Attribute handle</param>
@@ -418,6 +426,10 @@ namespace BGBLE
 
             result += "\nAddress: " + _address;
             result += "\nMax Connections: " + _maxConnectionsAllowed;
+            result += "\nAPI Protocol Version: " + _hardwareInfo.apiProtocolVersion;
+            result += "\nSoftware Version: " + _hardwareInfo.majorSoftwareVersion + "." + _hardwareInfo.minorSoftwareVersion + "." + _hardwareInfo.buildVersion + "." + _hardwareInfo.patchId;
+            result += "\nHardware Version: " + _hardwareInfo.hardwareVersion;
+            result += "\nLink Layer Version: " + _hardwareInfo.linkLayerVersion;
 
             return result;
         }
