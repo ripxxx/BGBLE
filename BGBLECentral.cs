@@ -61,6 +61,10 @@ namespace BGBLE
             ConnectionRestored = connectionRestoredEventHandler;
 
             BGAPIConnection.DeviceAvailable += ((object sender, BGAPIDeviceChangeEventArgs e) => {
+                SerialPort _serialPort = new SerialPort(e.PortName, 115200);
+
+                _connection = BGAPIConnection.SharedConnection(_serialPort);
+
                 Initialize();
 
                 BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
