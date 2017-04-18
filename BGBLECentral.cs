@@ -14,7 +14,6 @@ using BGBLE.BGAPI;
 
 namespace BGBLE
 {
-
     public class BGBLEDeviceInfoReceivedEventArgs : EventArgs
     {
         public BGBLEDevice Device { get; set; }
@@ -23,15 +22,23 @@ namespace BGBLE
     }
     public delegate void BGBLEDeviceInfoReceivedEventHandler(object sender, BGBLEDeviceInfoReceivedEventArgs e);
 
+    public class BGBLECentralAdapterConnectionStateChangeEventArgs : EventArgs
+    {
+       
+    }
+    public delegate void BGBLECentralAdapterConnectionStateChangEventHandler(object sender, BGBLECentralAdapterConnectionStateChangeEventArgs e);
+
     /// <summary>This class implements BLE central which using BG API.</summary>
     public class BGBLECentral
     {
+        private const string REQUIRED_ADAPTER_SOFTWARE_VERSION = "1.3.2.122";
         private const double STATE_UPDATE_INTERVAL = 2000;
 
         private string _address;
         private BGAPIConnection _connection;
         private Dictionary<string, BGBLEDevice> _devicesByAddress;
         private Dictionary<byte, BGBLEDevice> _devicesByConnectionHandle;
+        private BGAPIHardwareInfo _hardwareInfo = new BGAPIHardwareInfo();
         private byte _maxConnectionsAllowed = 0;
         //COMMANDS CLASSES
         private BGAPIAttributeClientCommandClass _attributeClientCommandClass;
@@ -45,53 +52,37 @@ namespace BGBLE
         public event BGBLEDeviceInfoReceivedEventHandler DeviceFound;
         /// <summary>Fires when device was lost.</summary>
         public event BGBLEDeviceInfoReceivedEventHandler DeviceLost;
+        public event BGBLECentralAdapterConnectionStateChangEventHandler ConnectionLost;
+        public event BGBLECentralAdapterConnectionStateChangEventHandler ConnectionRestored;
 
-        public BGBLECentral(SerialPort serialPort = null)
+        public BGBLECentral(SerialPort serialPort = null, BGBLECentralAdapterConnectionStateChangEventHandler connectionLostEventHandler = null, BGBLECentralAdapterConnectionStateChangEventHandler connectionRestoredEventHandler = null)
         {
+            ConnectionLost = connectionLostEventHandler;
+            ConnectionRestored = connectionRestoredEventHandler;
+
+            BGAPIConnection.DeviceAvailable += ((object sender, BGAPIDeviceChangeEventArgs e) => {
+                SerialPort _serialPort = new SerialPort(e.PortName, 115200);
+
+                _connection = BGAPIConnection.SharedConnection(_serialPort);
+
+                Initialize();
+
+                BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
+                ConnectionRestored?.Invoke(this, eventArgs);
+            });
+
             _connection = BGAPIConnection.SharedConnection(serialPort);
 
-            _devicesByAddress = new Dictionary<string, BGBLEDevice>();
-            _devicesByConnectionHandle = new Dictionary<byte, BGBLEDevice>();
+            Initialize();
+        }
 
-            _attributeClientCommandClass = new BGAPIAttributeClientCommandClass(_connection);
-            _connectionCommandClass = new BGAPIConnectionCommandClass(_connection);
-            _gapCommandClass = new BGAPIGAPCommandClass(_connection);
-            _systemCommandClass = new BGAPISystemCommandClass(_connection);
+        public BGBLECentral(BGBLECentralAdapterConnectionStateChangEventHandler connectionLostEventHandler = null, BGBLECentralAdapterConnectionStateChangEventHandler connectionRestoredEventHandler = null) : this(null, connectionLostEventHandler, connectionRestoredEventHandler)
+        {
+        }
 
-            _timer = new System.Timers.Timer(STATE_UPDATE_INTERVAL);
-            _timer.Elapsed += TimeoutReached;
+        public BGBLECentral() : this(null, null, null)
+        {
 
-            //CHECKING DEVICE
-            try
-            {
-                Hello();
-
-                //GETTING BLED112 MAC ADDRESS
-                _address = _systemCommandClass.GetAddress();
-
-                //GETTING MAX CONNECTIONS
-                _maxConnectionsAllowed = _systemCommandClass.GetConnections();
-
-                //STOP DISCOVERY PROCESS, JUST IN CASE)
-                _gapCommandClass.EndProcedure();
-
-                //SETTING UP ACTIVE SCANNING MODE
-                _gapCommandClass.SetScanParameters(true);
-            }
-            catch (BGAPIException ex) {
-                throw new BGAPIException(0xFF91, ex);
-            }
-
-            _attributeClientCommandClass.AttributeValue += AttributeClientCommandClassAttributeValue;
-            _attributeClientCommandClass.GroupFound += AttributeClientCommandClassGroupFound;
-            _attributeClientCommandClass.Indicated += AttributeClientCommandClassIndicated;
-            _attributeClientCommandClass.InformationFound += AttributeClientCommandClassInformationFound;
-            _attributeClientCommandClass.ProcedureCompleted += AttributeClientCommandClassProcedureCompleted;
-            //_attributeClientCommandClass.ReadMultiple += AttributeClientCommandClassReadMultiple;
-
-            _connectionCommandClass.StatusChanged += ConnectionCommandClassStatusChanged;
-            _connectionCommandClass.Disconnected += ConnectionCommandClassDisconnected;
-            _gapCommandClass.DeviceFound += GAPCommandClassDeviceFound;
         }
 
         ~BGBLECentral()
@@ -100,6 +91,11 @@ namespace BGBLE
         }
 
         // PROPRTIES
+        /// <summary>BLED112 adapter firmware version.</summary>
+        public string AdapterSoftwareVersion
+        {
+            get { return _hardwareInfo.majorSoftwareVersion + "." + _hardwareInfo.minorSoftwareVersion + "." + _hardwareInfo.patchId + "." + _hardwareInfo.buildVersion; }
+        }
         /// <summary>Shared BG API Connection.</summary>
         public BGAPIConnection Connection
         {
@@ -253,11 +249,49 @@ namespace BGBLE
         }
         // EVENT HANDLERS
 
+        private void Initialize()
+        {
+            _connection.DeviceInserted += ((object sender, BGAPIDeviceChangeEventArgs e) => {
+                Open();
+                BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
+                ConnectionRestored?.Invoke(this, eventArgs);
+            });
+
+            _connection.DeviceRemoved += ((object sender, BGAPIDeviceChangeEventArgs e) => {
+                Close();
+                BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
+                ConnectionLost?.Invoke(this, eventArgs);
+            });
+
+            _devicesByAddress = new Dictionary<string, BGBLEDevice>();
+            _devicesByConnectionHandle = new Dictionary<byte, BGBLEDevice>();
+
+            _attributeClientCommandClass = new BGAPIAttributeClientCommandClass(_connection);
+            _connectionCommandClass = new BGAPIConnectionCommandClass(_connection);
+            _gapCommandClass = new BGAPIGAPCommandClass(_connection);
+            _systemCommandClass = new BGAPISystemCommandClass(_connection);
+
+            _timer = new System.Timers.Timer(STATE_UPDATE_INTERVAL);
+            _timer.Elapsed += TimeoutReached;
+
+            Open();
+
+            _attributeClientCommandClass.AttributeValue += AttributeClientCommandClassAttributeValue;
+            _attributeClientCommandClass.GroupFound += AttributeClientCommandClassGroupFound;
+            _attributeClientCommandClass.Indicated += AttributeClientCommandClassIndicated;
+            _attributeClientCommandClass.InformationFound += AttributeClientCommandClassInformationFound;
+            _attributeClientCommandClass.ProcedureCompleted += AttributeClientCommandClassProcedureCompleted;
+            //_attributeClientCommandClass.ReadMultiple += AttributeClientCommandClassReadMultiple;
+
+            _connectionCommandClass.StatusChanged += ConnectionCommandClassStatusChanged;
+            _connectionCommandClass.Disconnected += ConnectionCommandClassDisconnected;
+            _gapCommandClass.DeviceFound += GAPCommandClassDeviceFound;
+        }
+
         /// <summary>Closes connection.</summary>
         public void Close()
         {
             _timer?.Stop();
-            _timer?.Dispose();
             _connection?.Close();
         }
 
@@ -348,6 +382,47 @@ namespace BGBLE
             return _systemCommandClass.Hello();
         }
 
+        /// <summary>Opens connection.</summary>
+        public void Open()
+        {
+            _connection?.Open();
+
+            while (!_connection.IsOpen);
+
+            //CHECKING DEVICE
+            try
+            {
+                Hello();
+                //GETTING BLED112 MAC ADDRESS
+                _address = _systemCommandClass.GetAddress();
+                //GETTING MAX CONNECTIONS
+                _maxConnectionsAllowed = _systemCommandClass.GetConnections();
+                //GETTING HARDWARE INFORMATION
+                _hardwareInfo = _systemCommandClass.GetInfo();
+                //STOP DISCOVERY PROCESS, JUST IN CASE)
+                _gapCommandClass.EndProcedure();
+                //SETTING UP ACTIVE SCANNING MODE
+                _gapCommandClass.SetScanParameters(true);
+#if DEBUG
+                Console.WriteLine("BLED112 CONECTION OPENED");
+#endif
+            }
+            catch (BGAPIException ex)
+            {
+                throw new BGAPIException(0xFF91, ex);
+            }
+
+            if (_maxConnectionsAllowed != 1)
+            {
+                throw new BGAPIException(0xFF99);
+            }
+
+            if (!AdapterSoftwareVersion.Equals(REQUIRED_ADAPTER_SOFTWARE_VERSION))
+            {
+                throw new BGAPIException(0xFF98);
+            }
+        }
+
         // <summary>Starts attribute value read procedure on connected device.</summary>
         /// <param name="connectionHandle">Connection handle</param>
         /// <param name="attributeHandle">Attribute handle</param>
@@ -424,6 +499,10 @@ namespace BGBLE
 
             result += "\nAddress: " + _address;
             result += "\nMax Connections: " + _maxConnectionsAllowed;
+            result += "\nAPI Protocol Version: " + _hardwareInfo.apiProtocolVersion;
+            result += "\nSoftware Version: " + AdapterSoftwareVersion;
+            result += "\nHardware Version: " + _hardwareInfo.hardwareVersion;
+            result += "\nLink Layer Version: " + _hardwareInfo.linkLayerVersion;
 
             return result;
         }

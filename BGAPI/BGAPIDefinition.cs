@@ -481,6 +481,8 @@ namespace BGBLE.BGAPI
                 { 0xFF01, new BGAPIErrorInfo(0xFF01, "Bluegiga BLED112 port was not found", "APIConnection", "Bluegiga BLED112 port was not found") },
                 { 0xFF02, new BGAPIErrorInfo(0xFF02, "Bluegiga BLED112 command execution timeout", "APIConnection", "Bluegiga BLED112 command execution timeout") },
                 { 0xFF03, new BGAPIErrorInfo(0xFF03, "Connection is wating for resposponse", "APIConnection", "Connection is wating for resposponse") },
+                { 0xFF04, new BGAPIErrorInfo(0xFF04, "Connection is wating for BLED112 connection to restore", "APIConnection", "Connection is wating for BLED112 connection to restore") },
+                { 0xFF05, new BGAPIErrorInfo(0xFF05, "Connection is wating for serial port to open", "APIConnection", "Connection is wating for serial port to open") },
                 //BGBLE Software Stack
                 { 0xFF91, new BGAPIErrorInfo(0xFF91, "Bluegiga BLED112 connection check failed", "BGBLE", "Bluegiga BLED112 connection check failed") },
                 { 0xFF92, new BGAPIErrorInfo(0xFF92, "Bluegiga BLED112 unable connect to device", "BGBLE", "Bluegiga BLED112 unable connect to device") },
@@ -489,6 +491,8 @@ namespace BGBLE.BGAPI
                 { 0xFF95, new BGAPIErrorInfo(0xFF95, "BGBLECharacteristic config to short", "BGBLE", "BGBLECharacteristic config to short") },
                 { 0xFF96, new BGAPIErrorInfo(0xFF96, "BGBLECharacteristic operation not supported", "BGBLE", "BGBLECharacteristic operation not supported") },
                 { 0xFF97, new BGAPIErrorInfo(0xFF97, "Bluegiga BLED112 device failed to execute command", "BGBLE", "Bluegiga BLED112 device failed to execute command") },
+                { 0xFF98, new BGAPIErrorInfo(0xFF98, "Bluegiga BLED112 device usupported software version", "BGBLE", "Bluegiga BLED112 device usupported software version") },
+                { 0xFF99, new BGAPIErrorInfo(0xFF99, "Bluegiga BLED112 device firmware upgrade required", "BGBLE", "Bluegiga BLED112 device firmware upgrade required") },
             };
         }
 

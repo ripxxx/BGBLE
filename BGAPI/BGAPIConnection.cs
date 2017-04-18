@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Management;
 using System.IO.Ports;
+using System.Runtime.InteropServices;
 
 namespace BGBLE.BGAPI
 {
@@ -68,21 +69,45 @@ namespace BGBLE.BGAPI
     }
     public delegate void BGAPIEventReceivedHandler(BGAPIConnectionEventData eventData);
 
+    public class BGAPIDeviceChangeEventArgs : EventArgs
+    {
+        public string PortName { get; set; }
+    }
+    public delegate void BGAPIDeviceChangeEventHandler(object sender, BGAPIDeviceChangeEventArgs e);
+
     /// <summary>This class serves connection with BLED112 device. To get instance of the class call class method Connection().</summary>
     public class BGAPIConnection
     {
+        private static Dictionary<string, BGAPIConnection> _instances;
+
+        private static ManagementEventWatcher deviceArrivalWatcher;
+        private static ManagementEventWatcher deviceRemovalWatcher;
+
         private Dictionary<ushort, BGAPIEventReceivedHandler> _eventHandlers;
-        private Dictionary<ushort, List<BGAPIConnectionEventData>> _eventsData;
+        private volatile Dictionary<ushort, List<BGAPIConnectionEventData>> _eventsData;
         private Dictionary<ushort, Thread> _eventsThreads;
-        private bool _isTimeoutReached = false;
+        private volatile bool _isTimeoutReached = false;
         private bool _isWatingResponse = false;
+        private bool _isWatingRestore = false;
         private BGAPIConnectionResponseData _responseData;
         private SerialPort _serialPort;
         private System.Timers.Timer _timer;
 
-        private static BGAPIConnection _instance = null;
+        /// <summary>Fires when device was attached to PC.</summary>
+        public event BGAPIDeviceChangeEventHandler DeviceInserted;
+        /// <summary>Fires when device was removed from PC.</summary>
+        public event BGAPIDeviceChangeEventHandler DeviceRemoved;
 
-        private BGAPIConnection(SerialPort serialPort = null)
+        /// <summary>Fires when device was attached to PC.</summary>
+        public static event BGAPIDeviceChangeEventHandler DeviceAvailable;
+
+        [DllImport("winmm.dll")]
+        internal static extern uint timeBeginPeriod(uint period);
+
+        [DllImport("winmm.dll")]
+        internal static extern uint timeEndPeriod(uint period);
+
+        private BGAPIConnection(SerialPort serialPort)
         {
             _eventHandlers = new Dictionary<ushort, BGAPIEventReceivedHandler>();
             _eventsData = new Dictionary<ushort, List<BGAPIConnectionEventData>>();
@@ -91,22 +116,9 @@ namespace BGBLE.BGAPI
 
             _responseData = new BGAPIConnectionResponseData();
             _responseData.isReady = false;
-            if (serialPort == null)
-            {
-                string portName = FindPort();
-                if(portName != "")
-                {
-                    _serialPort = new SerialPort(portName, 512000);
-                }
-                else
-                {
-                    throw new BGAPIException(0xFF01);
-                }
-            }
-            else
-            {
-                _serialPort = serialPort;
-            }
+
+            _serialPort = serialPort;
+
             if (_serialPort.IsOpen)
             {
                 _serialPort.Close();
@@ -160,6 +172,138 @@ namespace BGBLE.BGAPI
             _isTimeoutReached = true;
         }
         // EVENT HANDLERS
+
+        private void RaseDeviceInserted(string newPortName = null)
+        {
+            if (_isWatingRestore)
+            {
+                if (newPortName != null)
+                {
+                    if (IsOpen)
+                    {
+                        Close();
+                        _serialPort.PortName = newPortName;
+                    }
+                }
+                _isWatingRestore = false;
+                Open();
+
+                BGAPIDeviceChangeEventArgs eventArgs = new BGAPIDeviceChangeEventArgs();
+                eventArgs.PortName = _serialPort.PortName;
+                DeviceInserted?.Invoke(this, eventArgs);
+            }
+        }
+
+        private void RaseDeviceRemoved()
+        {
+            if (!_isWatingRestore)
+            {
+                _isWatingRestore = true;
+                Close();
+
+                BGAPIDeviceChangeEventArgs eventArgs = new BGAPIDeviceChangeEventArgs();
+                eventArgs.PortName = _serialPort.PortName;
+                DeviceRemoved?.Invoke(this, eventArgs);
+            }
+        }
+
+        /// <summary>Seraches for serial ports of devices with VID&PID = VID_2458&PID_0001 in WMI database.</summary>
+        /// <returns>Returns list with serial ports names: COM1, COM2, ...</returns>
+        public static List<string> FindPorts()
+        {
+            string query = "SELECT DeviceID, PNPDeviceID FROM Win32_SerialPort WHERE PNPDeviceID LIKE '%VID_2458&PID_0001%'";
+            List<string> ports = new List<string>();
+            ManagementObjectSearcher searcher = new ManagementObjectSearcher("root\\CIMV2", query);
+
+            try
+            {
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    var port = obj["DeviceID"].ToString().Trim();
+                    ports.Add(port);
+                }
+            }
+            catch (Exception ex) {
+#if DEBUG
+                Console.WriteLine("Searching available ports error: " + ex.Message);
+#endif
+            }
+
+            return ports;
+        }
+
+        /// <summary>Registers watchers to receive device inserted an device removed events.</summary>
+        private static void RegisterDeviceChangeWatchers()
+        {
+            //Device Arrival = 2
+            var deviceArrivalQuery = new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2");
+            //Device Removal = 3
+            var deviceRemovalQuery = new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 3");
+
+            deviceArrivalWatcher = new ManagementEventWatcher(deviceArrivalQuery);
+            deviceRemovalWatcher = new ManagementEventWatcher(deviceRemovalQuery);
+
+            deviceArrivalWatcher.EventArrived += ((sender, eventArgs) => {
+                var ports = FindPorts();
+                if (ports.Count == 0)
+                {
+                    return;
+                }
+
+                if (_instances.Count == 0)
+                {
+                    BGAPIDeviceChangeEventArgs _eventArgs = new BGAPIDeviceChangeEventArgs();
+                    _eventArgs.PortName = ports.First();
+                    DeviceAvailable?.Invoke(null, _eventArgs);
+                    return;
+                }
+
+                var freePorts = new List<string>();
+
+                foreach (var portName in ports)
+                {
+                    if (_instances.ContainsKey(portName))
+                    {
+                        _instances[portName].RaseDeviceInserted();
+                    }
+                    else
+                    {
+                        freePorts.Add(portName);
+                    }
+                }
+
+                while (freePorts.Count > 0)
+                {
+                    var portName = freePorts.First();
+                    freePorts.RemoveAt(0);
+                    foreach (KeyValuePair<string, BGAPIConnection> entry in _instances)
+                    {
+                        if (!ports.Contains(entry.Key))
+                        {
+                            _instances[portName] = _instances[entry.Key];
+                            _instances.Remove(entry.Key);
+                            entry.Value.RaseDeviceInserted(portName);
+                        }
+                    }
+                }
+            });
+
+            deviceRemovalWatcher.EventArrived += ((sender, eventArgs) => {
+                var ports = FindPorts();
+
+                foreach (KeyValuePair<string, BGAPIConnection> entry in _instances)
+                {
+                    if (!ports.Contains(entry.Key))
+                    {
+                        entry.Value.RaseDeviceRemoved();
+                    }
+                }
+            });
+
+            // Start listening for events
+            deviceArrivalWatcher.Start();
+            deviceRemovalWatcher.Start();
+        }
 
         /// <summary>Parses data packet and extracts header information.</summary>
         /// <param name="data">Packet data</param>
@@ -265,7 +409,9 @@ namespace BGBLE.BGAPI
 
                                                 _eventsData[t_threadId].RemoveAt(0);
                                             }
+                                            timeBeginPeriod(1);
                                             Thread.Sleep(2);
+                                            timeEndPeriod(1);
                                         }
                                     });
                                     _eventsThreads[threadId] = eventThread;
@@ -300,6 +446,15 @@ namespace BGBLE.BGAPI
             }
         }
 
+        /// <summary>Opens the serial port.</summary>
+        public void Open()
+        {
+            if ((_serialPort != null) && !_serialPort.IsOpen)
+            {
+                _serialPort.Open();
+            }
+        }
+
         /// <summary>Registering event handler for command class.</summary>
         /// <param name="commandClassId">Id of BG API command class</param>
         /// <param name="eventHandler">Event Handler which will be called when event packet(of command class) received</param>
@@ -326,7 +481,15 @@ namespace BGBLE.BGAPI
         /// <returns>Returns structure of type BGAPIPacketPayload which contains packet header information and packet data.</returns>
         public BGAPIPacketPayload SendCommand(byte commandClassId, byte commandId, byte[] payload, ushort payloadLength)
         {
-            if (_isWatingResponse)
+            if (_isWatingRestore)
+            {
+                throw new BGAPIException(0xFF04);
+            }
+            else if (!IsOpen)
+            {
+                throw new BGAPIException(0xFF05);
+            }
+            else if (_isWatingResponse)
             {
                 throw new BGAPIException(0xFF03);
             }
@@ -353,7 +516,7 @@ namespace BGBLE.BGAPI
             _timer.Start();
             _serialPort.Write(requestData, 0, requestDataLength);
             _isWatingResponse = true;
-            while (_isWatingResponse)
+            while (_isWatingResponse && !_isWatingRestore)
             {
                 if (_isTimeoutReached)
                 {
@@ -386,30 +549,67 @@ namespace BGBLE.BGAPI
         /// <returns>Returns object of BGAPIConnection.</returns>
         public static BGAPIConnection SharedConnection(SerialPort serialPort = null)
         {
-            if (_instance == null)
-            {
-                _instance = new BGAPIConnection(serialPort);
+            if ((_instances == null) || (_instances.Count == 0)) {
+                if (_instances == null) {
+                    _instances = new Dictionary<string, BGAPIConnection>();
+
+                    RegisterDeviceChangeWatchers();
+                }
+
+                SerialPort _serialPort = serialPort;
+                if (_serialPort == null)
+                {
+                    var portName = FindPort();
+                    if (portName != "")
+                    {
+                        _serialPort = new SerialPort(portName, 115200);
+                    }
+                    else
+                    {
+                        throw new BGAPIException(0xFF01);
+                    }
+                }
+
+                _instances[_serialPort.PortName] = new BGAPIConnection(_serialPort);
+
+                return _instances[_serialPort.PortName];
             }
-            return _instance;
+            else
+            {
+                SerialPort _serialPort = serialPort;
+                if (_serialPort == null)
+                {
+                    return _instances.First().Value;
+                }
+                else
+                {
+                    var portName = _serialPort.PortName;
+                    if (!_instances.ContainsKey(portName))
+                    {
+                        _instances[portName] = new BGAPIConnection(serialPort);
+                    }
+                    return _instances[portName];
+                }
+            }
+
+            
         }
 
-        /// <summary>Seraches for serial port device with VID&PID = VID_2458&PID_0001 in WMI database.</summary>
+        /// <summary>Seraches for free serial port device with VID&PID = VID_2458&PID_0001 in WMI database.</summary>
         /// <returns>Returns string with serial port name: COM1, COM2, ...</returns>
         public static string FindPort()
         {
-            string query = "SELECT DeviceID, PNPDeviceID FROM Win32_SerialPort WHERE PNPDeviceID LIKE '%VID_2458&PID_0001%'";
-            string result = String.Empty;
-
-            ManagementObjectSearcher searcher = new ManagementObjectSearcher("root\\CIMV2", query);
-            try
+            var ports = FindPorts();
+            if (ports.Count > 0)
             {
-                foreach (ManagementObject obj in searcher.Get())
+                foreach (var portName in ports)
                 {
-                    result = obj["DeviceID"].ToString().Trim();
-                    return result;
+                    if (!_instances.ContainsKey(portName))
+                    {
+                        return portName;
+                    }
                 }
             }
-            catch (Exception ex) { }
             return "";
         }
     }
