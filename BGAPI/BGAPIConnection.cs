@@ -69,16 +69,11 @@ namespace BGBLE.BGAPI
     }
     public delegate void BGAPIEventReceivedHandler(BGAPIConnectionEventData eventData);
 
-    public struct BGAPIDeviceChangeEventData
+    public class BGAPIDeviceChangeEventArgs : EventArgs
     {
-        public string portName;
-
-        public BGAPIDeviceChangeEventData(string _portName)
-        {
-            portName = _portName;
-        }
+        public string PortName { get; set; }
     }
-    public delegate void BGAPIDeviceChangeEventHandler(BGAPIDeviceChangeEventData eventData);
+    public delegate void BGAPIDeviceChangeEventHandler(object sender, BGAPIDeviceChangeEventArgs e);
 
     /// <summary>This class serves connection with BLED112 device. To get instance of the class call class method Connection().</summary>
     public class BGAPIConnection
@@ -193,8 +188,9 @@ namespace BGBLE.BGAPI
                 _isWatingRestore = false;
                 Open();
 
-                BGAPIDeviceChangeEventData eventData = new BGAPIDeviceChangeEventData(_serialPort.PortName);
-                DeviceInserted?.Invoke(eventData);
+                BGAPIDeviceChangeEventArgs eventArgs = new BGAPIDeviceChangeEventArgs();
+                eventArgs.PortName = _serialPort.PortName;
+                DeviceInserted?.Invoke(this, eventArgs);
             }
         }
 
@@ -205,8 +201,9 @@ namespace BGBLE.BGAPI
                 _isWatingRestore = true;
                 Close();
 
-                BGAPIDeviceChangeEventData eventData = new BGAPIDeviceChangeEventData(_serialPort.PortName);
-                DeviceRemoved?.Invoke(eventData);
+                BGAPIDeviceChangeEventArgs eventArgs = new BGAPIDeviceChangeEventArgs();
+                eventArgs.PortName = _serialPort.PortName;
+                DeviceRemoved?.Invoke(this, eventArgs);
             }
         }
 
@@ -255,8 +252,9 @@ namespace BGBLE.BGAPI
 
                 if (_instances.Count == 0)
                 {
-                    BGAPIDeviceChangeEventData eventData = new BGAPIDeviceChangeEventData(ports.First());
-                    DeviceAvailable?.Invoke(eventData);
+                    BGAPIDeviceChangeEventArgs _eventArgs = new BGAPIDeviceChangeEventArgs();
+                    _eventArgs.PortName = ports.First();
+                    DeviceAvailable?.Invoke(null, _eventArgs);
                     return;
                 }
 

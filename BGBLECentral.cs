@@ -22,11 +22,11 @@ namespace BGBLE
     }
     public delegate void BGBLEDeviceInfoReceivedEventHandler(object sender, BGBLEDeviceInfoReceivedEventArgs e);
 
-    public struct BGBLECentralConnectionStateChangeEventData
+    public class BGBLECentralAdapterConnectionStateChangeEventArgs : EventArgs
     {
        
     }
-    public delegate void BGBLECentralConnectionStateChangEventHandler(BGBLECentralConnectionStateChangeEventData eventData);
+    public delegate void BGBLECentralAdapterConnectionStateChangEventHandler(object sender, BGBLECentralAdapterConnectionStateChangeEventArgs e);
 
     /// <summary>This class implements BLE central which using BG API.</summary>
     public class BGBLECentral
@@ -52,21 +52,33 @@ namespace BGBLE
         public event BGBLEDeviceInfoReceivedEventHandler DeviceFound;
         /// <summary>Fires when device was lost.</summary>
         public event BGBLEDeviceInfoReceivedEventHandler DeviceLost;
-        public event BGBLECentralConnectionStateChangEventHandler ConnectionLost;
-        public event BGBLECentralConnectionStateChangEventHandler ConnectionRestored;
+        public event BGBLECentralAdapterConnectionStateChangEventHandler ConnectionLost;
+        public event BGBLECentralAdapterConnectionStateChangEventHandler ConnectionRestored;
 
-        public BGBLECentral(SerialPort serialPort = null)
+        public BGBLECentral(SerialPort serialPort = null, BGBLECentralAdapterConnectionStateChangEventHandler connectionLostEventHandler = null, BGBLECentralAdapterConnectionStateChangEventHandler connectionRestoredEventHandler = null)
         {
-            BGAPIConnection.DeviceAvailable += ((BGAPIDeviceChangeEventData e) => {
+            ConnectionLost = connectionLostEventHandler;
+            ConnectionRestored = connectionRestoredEventHandler;
+
+            BGAPIConnection.DeviceAvailable += ((object sender, BGAPIDeviceChangeEventArgs e) => {
                 Initialize();
 
-                BGBLECentralConnectionStateChangeEventData eventData = new BGBLECentralConnectionStateChangeEventData();
-                ConnectionRestored?.Invoke(eventData);
+                BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
+                ConnectionRestored?.Invoke(this, eventArgs);
             });
 
             _connection = BGAPIConnection.SharedConnection(serialPort);
 
             Initialize();
+        }
+
+        public BGBLECentral(BGBLECentralAdapterConnectionStateChangEventHandler connectionLostEventHandler = null, BGBLECentralAdapterConnectionStateChangEventHandler connectionRestoredEventHandler = null) : this(null, connectionLostEventHandler, connectionRestoredEventHandler)
+        {
+        }
+
+        public BGBLECentral() : this(null, null, null)
+        {
+
         }
 
         ~BGBLECentral()
@@ -229,16 +241,16 @@ namespace BGBLE
 
         private void Initialize()
         {
-            _connection.DeviceInserted += ((BGAPIDeviceChangeEventData e) => {
+            _connection.DeviceInserted += ((object sender, BGAPIDeviceChangeEventArgs e) => {
                 Open();
-                BGBLECentralConnectionStateChangeEventData eventData = new BGBLECentralConnectionStateChangeEventData();
-                ConnectionRestored?.Invoke(eventData);
+                BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
+                ConnectionRestored?.Invoke(this, eventArgs);
             });
 
-            _connection.DeviceRemoved += ((BGAPIDeviceChangeEventData e) => {
+            _connection.DeviceRemoved += ((object sender, BGAPIDeviceChangeEventArgs e) => {
                 Close();
-                BGBLECentralConnectionStateChangeEventData eventData = new BGBLECentralConnectionStateChangeEventData();
-                ConnectionLost?.Invoke(eventData);
+                BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
+                ConnectionLost?.Invoke(this, eventArgs);
             });
 
             _devicesByAddress = new Dictionary<string, BGBLEDevice>();
