@@ -385,9 +385,15 @@ namespace BGBLE.BGAPI
                                     _eventsData[threadId] = new List<BGAPIConnectionEventData>();
                                 }
 
-                                if (!_eventsThreads.ContainsKey(threadId))
+                                if (!_eventsThreads.ContainsKey(threadId) || (_eventsThreads[threadId].ThreadState == ThreadState.Stopped))
                                 {
                                     var threadName = "EventThread_" + threadId.ToString("X");
+                                    if (_eventsThreads.ContainsKey(threadId))
+                                    {
+#if DEBUG
+                                        Console.WriteLine("RESTORING THREAD: " + threadName);
+#endif
+                                    }
                                     Thread eventThread = new Thread(() => {
                                         byte t_commandClassId = header.commandClassId;
                                         ushort t_threadId = threadId;
