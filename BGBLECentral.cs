@@ -259,6 +259,8 @@ namespace BGBLE
 
             _connection.DeviceRemoved += ((object sender, BGAPIDeviceChangeEventArgs e) => {
                 Close();
+                _devicesByAddress.Clear();
+                _devicesByConnectionHandle.Clear();
                 BGBLECentralAdapterConnectionStateChangeEventArgs eventArgs = new BGBLECentralAdapterConnectionStateChangeEventArgs();
                 ConnectionLost?.Invoke(this, eventArgs);
             });
