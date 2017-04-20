@@ -202,8 +202,21 @@ namespace BGBLE.BGAPI
                         _eventsArgs[(byte)attributeValueType] = new List<BGAPIAttributeClientCommandClassAttributeValueEventArgs>();
                     }
 
-                    if (!_eventsThreads.ContainsKey((byte)attributeValueType))
+                    if (!_eventsThreads.ContainsKey((byte)attributeValueType) || (_eventsThreads[(byte)attributeValueType].ThreadState == ThreadState.Stopped))
                     {
+                        var threadName = "EventThread_AttributeValue_" + attributeValueType;
+                        if (_eventsThreads.ContainsKey((byte)attributeValueType))
+                        {
+#if DEBUG
+                            Console.WriteLine("RESTORING THREAD: " + threadName);
+#endif
+                        }
+                        else
+                        {
+#if DEBUG
+                            Console.WriteLine("STARTING THREAD: " + threadName);
+#endif
+                        }
                         Thread eventThread = new Thread(() => {
                             byte t_threadId = (byte)attributeValueType;
 
@@ -223,11 +236,13 @@ namespace BGBLE.BGAPI
 
                                     _eventsArgs[t_threadId].RemoveAt(0);
                                 }
+                                BGAPIConnection.timeBeginPeriod(1);
                                 Thread.Sleep(2);
+                                BGAPIConnection.timeEndPeriod(1);
                             }
                         });
                         _eventsThreads[(byte)attributeValueType] = eventThread;
-                        eventThread.Name = "EventThread_AttributeValue_" + attributeValueType;
+                        eventThread.Name = threadName;
                         eventThread.Start();
                     }
 
