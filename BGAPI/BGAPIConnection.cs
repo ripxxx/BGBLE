@@ -391,7 +391,13 @@ namespace BGBLE.BGAPI
                                     if (_eventsThreads.ContainsKey(threadId))
                                     {
 #if DEBUG
-                                        Console.WriteLine("RESTORING THREAD: " + threadName);
+                                        Console.WriteLine("RESTARTING THREAD: " + threadName);
+#endif
+                                    }
+                                    else
+                                    {
+#if DEBUG
+                                        Console.WriteLine("STARTING THREAD: " + threadName);
 #endif
                                     }
                                     Thread eventThread = new Thread(() => {
