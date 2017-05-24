@@ -31,7 +31,7 @@ namespace BGBLE
     /// <summary>This class implements BLE central which using BG API.</summary>
     public class BGBLECentral
     {
-        private const string REQUIRED_ADAPTER_SOFTWARE_VERSION = "1.3.2.122";
+        private const string REQUIRED_ADAPTER_SOFTWARE_VERSION = "1.5.0.137";
         private const double STATE_UPDATE_INTERVAL = 2000;
 
         private string _address;
